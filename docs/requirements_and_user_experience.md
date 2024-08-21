@@ -129,11 +129,11 @@ This section describes the functionality & behavior that Data Platform charmed d
 Top-level bullet points are requirements. Sub-level bullet points are the rationale for a requirement.
 - Refresh units in place
   - To avoid replicating large amounts of data
-  - To avoid downtime
   - To avoid additional hardware costs
   - To keep existing configuration & integrations with other Juju applications
 - Refresh units one at a time
   - To serve read & write traffic to database during refresh
+  - To reduce downtime
   - To test new version with subset of traffic (e.g. on one unit) before switching all traffic to new version
 - Rollback refreshed units (one at a time) at any time during refresh
   - If there are any issues with new version of charm code or workload
@@ -155,6 +155,10 @@ Top-level bullet points are requirements. Sub-level bullet points are the ration
   - In case the user accidentally refreshed to a different charm code version than they intended
 - If a unit (e.g. the leader) is in error state (charm raises uncaught exception), allow refresh on other units with manual user confirmation
   - For an application with several units refreshed, it may be safer to ignore one unhealthy unit and complete the refresh then to rollback all refreshed units
+- For all workloads supported by Canonical, allow charms to have a 1:1 mapping between charm revision to workload version (i.e. snap revision or OCI image hash)—or allow charms to have a 1:many mapping if the charm uses immutable (cannot change after charm is deployed) config options that create a 1:1 mapping between charm revision with those config values to workload version.
+  - To keep the Data Platform team's options open in the future. For example, the PostgreSQL charm may be compatible with an open-source and an enterprise version of a plugin. The Data Platform team may ship the open-source and enterprise versions separately by using (1) different Charmhub tracks or (2) config values (using a single charm revision). This requirement keeps the choice of option 2 available (hopefully) without requiring breaking changes to the refresh implementation.
+- Allow refreshes from workloads not supported by Canonical to workloads supported by Canonical. (This is not officially supported—it is only permitted.)
+  - To allow user to manually apply an urgent security patch to a workload supported by Canonical (making it become a workload not supported by Canonical) and then later refresh to a workload supported by Canonical
 
 # User experience
 This section is a full description—excluding user documentation—of how the user interacts with and experiences an in-place refresh of a single Juju application. The user experience satisfies the [product requirements](#product-requirements).
@@ -212,7 +216,7 @@ Before the user runs `juju refresh`, they should run the `pre-refresh-check` act
 
 Optional: In the user documentation, this step will not be marked as optional (since it improves the safety of the refresh—especially on Kubernetes). However, since forgetting to run the action is a common mistake (it has already happened on a production PostgreSQL charm), it is not required.
 
-This action should not be run before a rollback.
+This action will fail if run before a rollback.
 
 ```yaml
 # actions.yaml
@@ -340,6 +344,11 @@ These statuses will have higher priority than any other unit status in a charm.
 
 ##### (Kubernetes only) If workload version does not match charm code version
 If the user runs `juju refresh` with `--revision` and without `--resource`, the workload(s) will not be refreshed. This is not supported—Data Platform charms pin a specific workload version for each charm code version.
+
+Similarly, these additional cases are not supported and will have the same user experience:
+- If the user runs `juju refresh` with `--resource` and with a `--revision` of the charm code that does not pin that specified resource (workload) version, the workload(s) & charm code will be refreshed but will not match.
+- If the user runs `juju refresh` with `--resource` and with `--channel` (they should instead only use `--channel`), the workload(s) & charm code will be refreshed but may not match.
+- If the user runs `juju refresh` with `--resource` and without `--channel` or `--revision`, Juju will use the currently tracked channel—which is the same as the previous case.
 ```
 Unit              Workload  [...]  Message
 postgresql-k8s/2  blocked          `juju refresh` ran with missing or incorrect OCI resource. Rollback with instructions in docs or `juju debug-log`
@@ -613,7 +622,7 @@ result: Refreshed unit 2
 where `2` is replaced with that unit (the first unit to refresh)
 
 #### If compatibility checks were not successful
-compatibility checks run before pre-refresh checks. It would be unusual for a user to run this command if compatibility checks were failing (and indicated as failing in unit status).
+Compatibility checks run before pre-refresh checks. It would be unusual for a user to run this command if compatibility checks were failing (and indicated as failing in unit status).
 ```
 $ juju run postgresql-k8s/2 force-refresh-start ignore-pre-refresh-checks=true
 Running operation 1 with 1 task

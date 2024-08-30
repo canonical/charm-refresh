@@ -25,11 +25,15 @@ Charm code version: Same meaning as charm [revision](https://juju.is/docs/sdk/re
 
 Outdated version:
 - Charm code version on a unit that **does not** match the application's charm code version (revision) and/or
-- Workload version on a unit that **does not** match the workload version pinned in the application's charm code version (revision)
+- Workload version on a unit that **does not** match the application's workload version
+    - On Kubernetes, the application's workload version is the [OCI resource](https://juju.is/docs/juju/charm-resource) specified by the user
+    - On machines, the application's workload version is pinned in the application's charm code version (revision)
 
 Up-to-date version:
 - Charm code version on a unit that **does** match the application's charm code version (revision) and/or
-- Workload version on a unit that **does** match the workload version pinned in the application's charm code version (revision)
+- Workload version on a unit that **does** match the application's workload version
+    - On Kubernetes, the application's workload version is the [OCI resource](https://juju.is/docs/juju/charm-resource) specified by the user
+    - On machines, the application's workload version is pinned in the application's charm code version (revision)
 
 Original version: workload and/or charm code version of all units immediately after the last completed refresh—or, if no completed refreshes, immediately after `juju deploy` and (on machines) initial installation
 
@@ -157,7 +161,7 @@ Top-level bullet points are requirements. Sub-level bullet points are the ration
   - For an application with several units refreshed, it may be safer to ignore one unhealthy unit and complete the refresh then to rollback all refreshed units
 - For all workloads supported by Canonical, allow charms to have a 1:1 mapping between charm revision to workload version (i.e. snap revision or OCI image hash)—or allow charms to have a 1:many mapping if the charm uses immutable (cannot change after charm is deployed) config options that create a 1:1 mapping between charm revision with those config values to workload version.
   - To keep the Data Platform team's options open in the future. For example, the PostgreSQL charm may be compatible with an open-source and an enterprise version of a plugin. The Data Platform team may ship the open-source and enterprise versions separately by using (1) different Charmhub tracks or (2) config values (using a single charm revision). This requirement keeps the choice of option 2 available (hopefully) without requiring breaking changes to the refresh implementation.
-- Allow refreshes from workloads not supported by Canonical to workloads supported by Canonical. (This is not officially supported—it is only permitted.)
+- Allow refreshes to and from workloads not supported by Canonical. (This is not officially supported—it is only permitted.)
   - To allow user to manually apply an urgent security patch to a workload supported by Canonical (making it become a workload not supported by Canonical) and then later refresh to a workload supported by Canonical
 
 # User experience
@@ -237,7 +241,7 @@ result: |-
   After the refresh has started, use this command to rollback (copy this down in case you need it later):
   `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro` is replaced with the link to the charm's refresh documentation, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original (current) charm code revision, and `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original (current) charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources)
+where `https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro` is replaced with the link to the charm's refresh documentation, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original (current) charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original (current) workload version
 
 #### Machines
 ```
@@ -301,7 +305,7 @@ During every Juju event, the leader unit will also log an INFO level message to 
 ```
 unit-postgresql-0: 11:34:35 INFO unit.postgresql/0.juju-log Refresh in progress. To rollback, run `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, and `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources)
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### Machines
 ```
@@ -334,7 +338,7 @@ This status will only show if an incompatible refresh has not been forced on the
 
 The leader unit will also log an INFO level message to `juju debug-log`. For example:
 ```
-unit-postgresql-0: 11:34:35 INFO unit.postgresql/0.juju-log Refresh incompatible. If you accept potential *data loss* and *downtime*, you can continue by running `force-refresh-start ignore-compatibility-checks=true` on unit 2
+unit-postgresql-0: 11:34:35 INFO unit.postgresql/0.juju-log Refresh incompatible. If you accept potential *data loss* and *downtime*, you can continue by running `force-refresh-start check-compatibility=false` on unit 2
 ```
 where `2` is replaced with the first unit to refresh
 
@@ -356,9 +360,9 @@ postgresql-k8s/2  blocked          `juju refresh` ran with missing or incorrect 
 
 The unit will also log an ERROR level message to `juju debug-log`. For example:
 ```
-unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` ran with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` ran with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you are intentionally attempting to refresh to a PostgreSQL container version that is NOT supported by Canonical—and you accept potential *data loss* and *downtime* during and *after* the refresh, you can force refresh to continue by running `force-refresh-start check-workload-is-supported=false` on unit 2
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, and `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources)
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### (Kubernetes only) If refresh is incompatible
 On Kubernetes, after the first unit refreshes and before that unit starts its workload, that unit (new charm code) checks if it supports refreshing from the previous workload & charm code version.
@@ -373,9 +377,9 @@ This status will only show on the first unit to refresh and only if the workload
 
 The unit will also log an INFO level message to `juju debug-log`. For example:
 ```
-unit-postgresql-k8s-2: 11:34:35 INFO unit.postgresql-k8s/2.juju-log Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you accept potential *data loss* and *downtime*, you can force refresh to continue by running `force-refresh-start ignore-compatibility-checks=true` on unit 2
+unit-postgresql-k8s-2: 11:34:35 INFO unit.postgresql-k8s/2.juju-log Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you accept potential *data loss* and *downtime*, you can force refresh to continue by running `force-refresh-start check-compatibility=false` on unit 2
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `2` is replaced with that unit (the first unit to refresh)
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version, and `2` is replaced with that unit (the first unit to refresh)
 
 ##### If automatic pre-refresh health checks & preparations fail
 Regardless of whether the user runs the `pre-refresh-check` action before `juju refresh`, the charm will run pre-refresh health checks & preparations after `juju refresh`—unless it is a rollback.
@@ -396,13 +400,13 @@ The unit will also log an ERROR level message to `juju debug-log`. For example:
 
 Kubernetes
 ```
-unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Pre-refresh check failed: Backup in progress. If you accept potential *data loss* and *downtime*, you can force the refresh to continue by running `force-refresh-start ignore-pre-refresh-checks=true` on unit 2
+unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you accept potential *data loss* and *downtime*, you can force the refresh to continue by running `force-refresh-start check-compatibility=false` on unit 2
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, and `2` is replaced with that unit (the first unit to refresh)
+where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version, and `2` is replaced with that unit (the first unit to refresh)
 
 Machines
 ```
-unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Rollback with `juju refresh`. Pre-refresh check failed: Backup in progress. If you accept potential *data loss* and *downtime*, you can continue by running `force-refresh-start ignore-pre-refresh-checks=true` on unit 2
+unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Pre-refresh check failed: Backup in progress. Rollback with `juju refresh`. If you accept potential *data loss* and *downtime*, you can continue by running `force-refresh-start check-compatibility=false` on unit 2
 ```
 where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed and `2` is replaced with that unit (the first unit to refresh)
 
@@ -496,9 +500,9 @@ mysql-router/2   waiting   Router 8.0.37; Snap revision 20002; Charmed operator 
 where `Router 8.0.37` and `Router 8.0.36` are replaced with the name & version of the workload(s) installed on that unit, `20002` and `20001` are replaced with the revision of the snap(s) installed on that unit, and `10008` is replaced with the revision of the charm code on that unit
 
 ## `force-refresh-start` action
-If the refresh is incompatible or the automatic pre-refresh health checks & preparations fail, the user will be prompted to rollback. If they accept potential data loss & downtime and want to proceed anyways (e.g. to force a downgrade), the user can run the `force-refresh-start` action on the first unit to refresh.
+If the refresh is incompatible, the automatic pre-refresh health checks & preparations fail, or the refresh is to a workload version not supported by Canonical, the user will be prompted to rollback. If they accept potential data loss & downtime and want to proceed anyways (e.g. to force a downgrade), the user can run the `force-refresh-start` action on the first unit to refresh.
 
-After `force-refresh-start` is run and the first unit's workload refreshes (machines) or attempts to start (Kubernetes), the compatibility and pre-refresh checks will not run again (unless the user runs `juju refresh` [and if `juju refresh` is a rollback, the pre-refresh checks will still not run again]).
+After `force-refresh-start` is run and the first unit's workload refreshes (machines) or attempts to start (Kubernetes), the compatibility, pre-refresh, and workload support checks will not run again (unless the user runs `juju refresh` [and if `juju refresh` is a rollback, the pre-refresh and workload support checks will still not run again]).
 
 ```yaml
 # actions.yaml
@@ -508,22 +512,29 @@ force-refresh-start:
     
     Force refresh of first unit
     
-    Must run with at least one of the ignore parameters `=true`
+    Must run with at least one of the parameters `=false`
   params:
-    ignore-compatibility-checks:
+    check-compatibility:
       type: boolean
-      default: false
+      default: true
       description: |
         Potential of *data loss* and *downtime*
         
-        Force refresh if new version of PostgreSQL and/or charm is not compatible with previous version
-    ignore-pre-refresh-checks:
+        If `false`, force refresh if new version of PostgreSQL and/or charm is not compatible with previous version
+    run-pre-refresh-checks:
       type: boolean
-      default: false
+      default: true
       description: |
         Potential of *data loss* and *downtime*
         
-        Force refresh if app is unhealthy or not ready to refresh (and unit status shows "Pre-refresh check failed")
+        If `false`, force refresh if app is unhealthy or not ready to refresh (and unit status shows "Pre-refresh check failed")
+    check-workload-is-supported:
+      type: boolean
+      default: true
+      description: |
+        Potential of *data loss* and *downtime* during and *after* refresh
+        
+        If `false`, allow refresh to PostgreSQL container version that is NOT supported by Canonical
   required: []
 ```
 where `PostgreSQL` is replaced with the name of the workload(s)
@@ -539,96 +550,71 @@ Action id 2 failed: Must run action on unit 2
 ```
 where `2` is replaced with the first unit to refresh
 
-### If action ran without ignore parameters
+### If action ran without 1+ parameters as `false`
 ```
 $ juju run postgresql-k8s/2 force-refresh-start
 Running operation 1 with 1 task
   - task 2 on unit-postgresql-k8s-2
 
 Waiting for task 2...
-Action id 2 failed: Must run with at least one of `ignore-compatibility-checks` or `ignore-pre-refresh-checks` parameters `=true`
+Action id 2 failed: Must run with at least one of `check-compatibility`, `run-pre-refresh-checks`, or `check-workload-is-supported` parameters `=false`
 ```
 
-### If action ran with `ignore-compatibility-checks=true` and `ignore-pre-refresh-checks=false`
-#### If pre-refresh health checks & preparations are successful
+### If action ran with 1+ parameters as `false`
+#### Part 1: `check-workload-is-supported`
+##### If `check-workload-is-supported=true` and check successful
 ```
-$ juju run postgresql-k8s/2 force-refresh-start ignore-compatibility-checks=true
+$ juju run postgresql-k8s/2 force-refresh-start [...]
 Running operation 1 with 1 task
   - task 2 on unit-postgresql-k8s-2
 
 Waiting for task 2...
-12:15:34 Skipping check for compatibility with previous PostgreSQL version and charm revision
-12:15:34 Running pre-refresh checks
-12:15:39 Pre-refresh checks successful
+12:15:34 Checked that refresh is to PostgreSQL container version supported by Canonical
+```
+where `PostgreSQL` is replaced with the name of the workload(s)
+
+##### If `check-workload-is-supported=true` and check not successful
+```
+$ juju run postgresql-k8s/2 force-refresh-start [...]
+Running operation 1 with 1 task
+  - task 2 on unit-postgresql-k8s-2
+
+Waiting for task 2...
 ```
 Kubernetes
 ```
-12:15:39 PostgreSQL refreshed. Attempting to start PostgreSQL
-
-result: Refreshed unit 2
+Action id 2 failed: Refresh is to PostgreSQL container version not supported by Canonical. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
 Machines
 ```
-12:15:39 Refreshing unit 2
-
-result: Refreshed unit 2
+Action id 2 failed: Refresh is to PostgreSQL container version not supported by Canonical. Rollback with `juju refresh`
 ```
-where `PostgreSQL` is replaced with the name of the workload(s) and `2` is replaced with that unit (the first unit to refresh)
+where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
-#### If pre-refresh health checks & preparations are not successful
+##### If `check-workload-is-supported=false`
 ```
-$ juju run postgresql-k8s/2 force-refresh-start ignore-compatibility-checks=true
+$ juju run postgresql-k8s/2 force-refresh-start [...] check-workload-is-supported=false
 Running operation 1 with 1 task
   - task 2 on unit-postgresql-k8s-2
 
 Waiting for task 2...
-12:15:34 Skipping check for compatibility with previous PostgreSQL version and charm revision
-12:15:34 Running pre-refresh checks
+12:15:34 Skipping check that refresh is to PostgreSQL container version supported by Canonical
+```
+where `PostgreSQL` is replaced with the name of the workload(s)
 
+#### Part 2: `check-compatibility`
+##### If `check-compatibility=true` and check successful
 ```
-Kubernetes
+$ juju run postgresql-k8s/2 force-refresh-start [...]
+[...]  # check-workload-is-supported
+12:15:34 Checked that refresh from previous PostgreSQL version and charm revision to current versions is compatible
 ```
-Action id 2 failed: Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Pre-refresh check failed: Backup in progress
-```
-Machines
-```
-Action id 2 failed: Rollback with `juju refresh`. Pre-refresh check failed: Backup in progress
-```
+where `PostgreSQL` is replaced with the name of the workload(s)
 
-where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed
-
-### If action ran with `ignore-compatibility-checks=false` and `ignore-pre-refresh-checks=true`
-#### If compatibility checks were successful
+##### If `check-compatibility=true` and check not successful
 ```
-$ juju run postgresql-k8s/2 force-refresh-start ignore-pre-refresh-checks=true
-Running operation 1 with 1 task
-  - task 2 on unit-postgresql-k8s-2
-
-Waiting for task 2...
-12:15:39 Skipping pre-refresh checks
-```
-Kubernetes
-```
-12:15:39 PostgreSQL refreshed. Attempting to start PostgreSQL
-
-result: Refreshed unit 2
-```
-Machines
-```
-12:15:39 Refreshing unit 2
-
-result: Refreshed unit 2
-```
-where `2` is replaced with that unit (the first unit to refresh)
-
-#### If compatibility checks were not successful
-Compatibility checks run before pre-refresh checks. It would be unusual for a user to run this command if compatibility checks were failing (and indicated as failing in unit status).
-```
-$ juju run postgresql-k8s/2 force-refresh-start ignore-pre-refresh-checks=true
-Running operation 1 with 1 task
-  - task 2 on unit-postgresql-k8s-2
-
-Waiting for task 2...
+$ juju run postgresql-k8s/2 force-refresh-start [...]
+[...]  # check-workload-is-supported
 ```
 Kubernetes
 ```
@@ -638,17 +624,57 @@ Machines
 ```
 Action id 2 failed: Refresh incompatible. Rollback with `juju refresh`
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, and `postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the OCI image(s) in the original charm code [resources](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources)
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
-### If action ran with `ignore-compatibility-checks=true` and `ignore-pre-refresh-checks=true`
+##### If `check-compatibility=false`
 ```
-$ juju run postgresql-k8s/2 force-refresh-start ignore-compatibility-checks=true ignore-pre-refresh-checks=true
-Running operation 1 with 1 task
-  - task 2 on unit-postgresql-k8s-2
+$ juju run postgresql-k8s/2 force-refresh-start [...] check-compatibility=false
+[...]  # check-workload-is-supported
+12:15:34 Skipping check for compatibility with previous PostgreSQL version and charm revision
+```
+where `PostgreSQL` is replaced with the name of the workload(s)
 
-Waiting for task 2...
-12:15:39 Skipping check for compatibility with previous PostgreSQL version and charm revision
+#### Part 3: `run-pre-refresh-checks`
+##### If `run-pre-refresh-checks=true` and check successful
+```
+$ juju run postgresql-k8s/2 force-refresh-start [...]
+[...]  # check-workload-is-supported
+[...]  # check-compatibility
+12:15:34 Running pre-refresh checks
+12:15:39 Pre-refresh checks successful
+```
+
+##### If `run-pre-refresh-checks=true` and check not successful
+```
+$ juju run postgresql-k8s/2 force-refresh-start [...]
+[...]  # check-workload-is-supported
+[...]  # check-compatibility
+12:15:34 Running pre-refresh checks
+```
+Kubernetes
+```
+Action id 2 failed: Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+```
+Machines
+```
+Action id 2 failed: Pre-refresh check failed: Backup in progress. Rollback with `juju refresh`
+```
+where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+
+##### If `run-pre-refresh-checks=false`
+```
+$ juju run postgresql-k8s/2 force-refresh-start [...] run-pre-refresh-checks=false
+[...]  # check-workload-is-supported
+[...]  # check-compatibility
 12:15:39 Skipping pre-refresh checks
+```
+
+#### Part 4: If all checks that ran were successful (or no checks ran)
+```
+$ juju run postgresql-k8s/2 force-refresh-start [...]
+[...]  # check-workload-is-supported
+[...]  # check-compatibility
+[...]  # run-pre-refresh-checks
 ```
 Kubernetes
 ```
@@ -663,7 +689,6 @@ Machines
 result: Refreshed unit 2
 ```
 where `PostgreSQL` is replaced with the name of the workload(s) and `2` is replaced with that unit (the first unit to refresh)
-
 
 ## `resume-refresh` action
 After the user runs `juju refresh`, if `pause_after_unit_refresh` is set to `all` or `first`, the refresh will pause.
@@ -683,18 +708,18 @@ resume-refresh:
     If `pause_after_unit_refresh` is set to `first`, this action will refresh all remaining units.
     Exception: if automatic health checks fail after a unit has refreshed, the refresh will pause.
     
-    If `pause_after_unit_refresh` is set to `none`, this action will have no effect unless it is called with `ignore-health-of-refreshed-units` as `true`.
+    If `pause_after_unit_refresh` is set to `none`, this action will have no effect unless it is called with `check-health-of-refreshed-units` as `false`.
   params:
-    ignore-health-of-refreshed-units:
+    check-health-of-refreshed-units:
       type: boolean
-      default: false
+      default: true
       description: |
         Potential of *data loss* and *downtime*
         
-        Force refresh (of next unit) if 1 or more refreshed units are unhealthy
+        If `false`, force refresh (of next unit) if 1 or more refreshed units are unhealthy
         
         WARNING: if first unit to refresh is unhealthy, consider running `force-refresh-start` action on that unit instead of using this parameter.
-        If first unit to refresh is unhealthy because compatibility checks or pre-refresh checks are failing, this parameter is more destructive than the `force-refresh-start` action.
+        If first unit to refresh is unhealthy because compatibility checks, pre-refresh checks, or workload support checks are failing, this parameter is more destructive than the `force-refresh-start` action.
   required: []
 ```
 
@@ -715,9 +740,9 @@ On machines, the user should run `resume-refresh` on the next unit to refresh. T
 
 This improves the robustness of rollbacks by requiring only the charm code on the unit that is rolling back to be healthy (i.e. not raising an uncaught exception). (If the action was run on the leader unit, rolling back a unit would require the charm code on both the leader unit & the unit rolling back to be healthy.)
 
-If `ignore-health-of-refreshed-units=false` (default), a unit rolling back will also check that units that have already rolled back are healthy.
+If `check-health-of-refreshed-units=true` (default), a unit rolling back will also check that units that have already rolled back are healthy.
 
-In case a refreshed unit is unhealthy and the user wants to force the refresh to continue, `ignore-health-of-refreshed-units=true` allows the user to run this action on any unit that is not up-to-date—so that they can skip over the unhealthy unit. However, the user should be instructed to follow the refresh order (usually highest to lowest unit number) even though they have the power to refresh any unit that is not up-to-date.
+In case a refreshed unit is unhealthy and the user wants to force the refresh to continue, `check-health-of-refreshed-units=false` allows the user to run this action on any unit that is not up-to-date—so that they can skip over the unhealthy unit. However, the user should be instructed to follow the refresh order (usually highest to lowest unit number) even though they have the power to refresh any unit that is not up-to-date.
 
 ### If action ran while refresh not in progress
 ```
@@ -732,18 +757,18 @@ Action id 2 failed: Must run action on leader unit. (e.g. `juju run postgresql-k
 where `postgresql-k8s` is replaced with the Juju application name
 
 #### Machines
-##### If action ran with `ignore-health-of-refreshed-units=false`
+##### If action ran with `check-health-of-refreshed-units=true`
 ```
 Action id 2 failed: Must run action on unit 1
 ```
 where `1` is replaced with the next unit to refresh
 
-##### If action ran with `ignore-health-of-refreshed-units=true` and unit already up-to-date
+##### If action ran with `check-health-of-refreshed-units=false` and unit already up-to-date
 ```
 Action id 2 failed: Unit already refreshed
 ```
 
-### If action ran with `ignore-health-of-refreshed-units=false`
+### If action ran with `check-health-of-refreshed-units=true`
 #### If `pause_after_unit_refresh` is `none`
 ```
 Action id 2 failed: `pause_after_unit_refresh` config is set to `none`. This action is not applicable.
@@ -791,7 +816,7 @@ result: Refreshed unit 1
 ```
 where `1` is replaced with the unit that is refreshing (the unit the action ran on)
 
-### If action ran with `ignore-health-of-refreshed-units=true` and refresh is successfully resumed
+### If action ran with `check-health-of-refreshed-units=false` and refresh is successfully resumed
 #### Kubernetes
 ```
 12:15:39 Ignoring health of refreshed units

@@ -420,9 +420,9 @@ In all the following examples, all units are healthy. If a unit was unhealthy, t
 Unit 2 has refreshed. Units 1 and 0 have not refreshed.
 ```
 Unit               Workload  Message
-postgresql-k8s/0*  active    PostgreSQL 14.11 running (restart pending); Charmed operator revision 10007
-postgresql-k8s/1   active    PostgreSQL 14.11 running (restart pending); Charmed operator revision 10007
-postgresql-k8s/2   active    PostgreSQL 14.12 running; Charmed operator revision 10008
+postgresql-k8s/0*  active    PostgreSQL 14.11 running (restart pending); Charm revision 10007
+postgresql-k8s/1   active    PostgreSQL 14.11 running (restart pending); Charm revision 10007
+postgresql-k8s/2   active    PostgreSQL 14.12 running; Charm revision 10008
 ```
 where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & version of the workload(s) installed on that unit and `10008` and `10007` are replaced with the revision of the charm code on that unit
 
@@ -430,9 +430,9 @@ where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & ver
 Units 2 and 1 refreshed from revision 10007 & OCI resource 76ef26 to revision 10008 & OCI resource 6be83f. Then, the user ran `juju refresh` to revision 10007 & OCI resource 76ef26. Unit 2 has rolled back.
 ```
 Unit               Workload  Message
-postgresql-k8s/0*  active    PostgreSQL 14.11 running (restart pending); Charmed operator revision 10007
-postgresql-k8s/1   active    PostgreSQL 14.12 running (restart pending); Charmed operator revision 10008
-postgresql-k8s/2   active    PostgreSQL 14.11 running; Charmed operator revision 10007
+postgresql-k8s/0*  active    PostgreSQL 14.11 running (restart pending); Charm revision 10007
+postgresql-k8s/1   active    PostgreSQL 14.12 running (restart pending); Charm revision 10008
+postgresql-k8s/2   active    PostgreSQL 14.11 running; Charm revision 10007
 ```
 where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & version of the workload(s) installed on that unit and `10008` and `10007` are replaced with the revision of the charm code on that unit
 
@@ -444,9 +444,9 @@ If the charm code is refreshed and the workload version is unchanged, all units 
 Unit 2 has refreshed. Units 1 and 0 have not refreshed.
 ```
 Unit               Workload  Message
-postgresql-k8s/0*  active    PostgreSQL 14.12 running (restart pending); Charmed operator revision 10008
-postgresql-k8s/1   active    PostgreSQL 14.12 running (restart pending); Charmed operator revision 10008
-postgresql-k8s/2   active    PostgreSQL 14.12 running; Charmed operator revision 10009
+postgresql-k8s/0*  active    PostgreSQL 14.12 running (restart pending); Charm revision 10008
+postgresql-k8s/1   active    PostgreSQL 14.12 running (restart pending); Charm revision 10008
+postgresql-k8s/2   active    PostgreSQL 14.12 running; Charm revision 10009
 ```
 where `PostgreSQL 14.12` is replaced with the name & version of the workload(s) installed on that unit and `10009` and `10008` are replaced with the revision of the charm code on that unit
 
@@ -458,20 +458,30 @@ For example, MySQL Router will only run if its charm is related to a MySQL charm
 Unit 2 has refreshed. Units 1 and 0 have not refreshed.
 ```
 Unit                 Workload  Message
-mysql-router-k8s/0*  waiting   Router 8.0.36; Charmed operator revision 10007 (restart pending)
-mysql-router-k8s/1   waiting   Router 8.0.36; Charmed operator revision 10007 (restart pending)
-mysql-router-k8s/2   waiting   Router 8.0.37; Charmed operator revision 10008
+mysql-router-k8s/0*  waiting   Router 8.0.36; Charm revision 10007 (restart pending)
+mysql-router-k8s/1   waiting   Router 8.0.36; Charm revision 10007 (restart pending)
+mysql-router-k8s/2   waiting   Router 8.0.37; Charm revision 10008
 ```
 where `Router 8.0.37` and `Router 8.0.36` are replaced with the name & version of the workload(s) installed on that unit and `10008` and `10007` are replaced with the revision of the charm code on that unit
+
+###### Example: Refresh to unsupported workload version
+The user refreshed to an unsupported workload version (OCI image 68ed80) and forced the refresh to continue with `force-refresh-start check-workload-is-expected=false`. Unit 2 has refreshed. Units 1 and 0 have not refreshed.
+```
+Unit               Workload  Message
+postgresql-k8s/0*  active    PostgreSQL 14.11 running (restart pending); Charm revision 10007
+postgresql-k8s/1   active    PostgreSQL 14.11 running (restart pending); Charm revision 10007
+postgresql-k8s/2   active    PostgreSQL 14.12 running; Charm revision 10008; Unexpected container 68ed80
+```
+where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & version of the workload(s) installed on that unit, `10008` and `10007` are replaced with the revision of the charm code on that unit, and `68ed80` is replaced with the first 6 characters of the OCI image hash
 
 ##### Machines
 ###### Example: Normal refresh
 Unit 2 has refreshed. Units 1 and 0 have not refreshed.
 ```
 Unit           Workload  Message
-postgresql/0*  active    PostgreSQL 14.11 running; Snap revision 20001 (outdated); Charmed operator revision 10008
-postgresql/1   active    PostgreSQL 14.11 running; Snap revision 20001 (outdated); Charmed operator revision 10008
-postgresql/2   active    PostgreSQL 14.12 running; Snap revision 20002; Charmed operator revision 10008
+postgresql/0*  active    PostgreSQL 14.11 running; Snap revision 20001 (outdated); Charm revision 10008
+postgresql/1   active    PostgreSQL 14.11 running; Snap revision 20001 (outdated); Charm revision 10008
+postgresql/2   active    PostgreSQL 14.12 running; Snap revision 20002; Charm revision 10008
 ```
 where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & version of the workload(s) installed on that unit, `20002` and `20001` are replaced with the revision of the snap(s) installed on that unit, and `10008` is replaced with the revision of the charm code on that unit
 
@@ -479,9 +489,9 @@ where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & ver
 The user ran `juju refresh` to revision 10008. Units 2 and 1 refreshed from snap revision 20001 to 20002. Then, the user ran `juju refresh` to revision 10007. Unit 2 has rolled back to snap revision 20001.
 ```
 Unit           Workload  Message
-postgresql/0*  active    PostgreSQL 14.11 running; Snap revision 20001; Charmed operator revision 10007
-postgresql/1   active    PostgreSQL 14.12 running; Snap revision 20002 (outdated); Charmed operator revision 10007
-postgresql/2   active    PostgreSQL 14.11 running; Snap revision 20001; Charmed operator revision 10007
+postgresql/0*  active    PostgreSQL 14.11 running; Snap revision 20001; Charm revision 10007
+postgresql/1   active    PostgreSQL 14.12 running; Snap revision 20002 (outdated); Charm revision 10007
+postgresql/2   active    PostgreSQL 14.11 running; Snap revision 20001; Charm revision 10007
 ```
 where `PostgreSQL 14.12` and `PostgreSQL 14.11` are replaced with the name & version of the workload(s) installed on that unit, `20002` and `20001` are replaced with the revision of the snap(s) installed on that unit, and `10007` is replaced with the revision of the charm code on that unit
 
@@ -493,9 +503,9 @@ For example, MySQL Router will only run if its charm is related to a MySQL charm
 Unit 2 has refreshed. Units 1 and 0 have not refreshed.
 ```
 Unit             Workload  Message
-mysql-router/0*  waiting   Router 8.0.36; Snap revision 20001 (outdated); Charmed operator revision 10008
-mysql-router/1   waiting   Router 8.0.36; Snap revision 20001 (outdated); Charmed operator revision 10008
-mysql-router/2   waiting   Router 8.0.37; Snap revision 20002; Charmed operator revision 10008
+mysql-router/0*  waiting   Router 8.0.36; Snap revision 20001 (outdated); Charm revision 10008
+mysql-router/1   waiting   Router 8.0.36; Snap revision 20001 (outdated); Charm revision 10008
+mysql-router/2   waiting   Router 8.0.37; Snap revision 20002; Charm revision 10008
 ```
 where `Router 8.0.37` and `Router 8.0.36` are replaced with the name & version of the workload(s) installed on that unit, `20002` and `20001` are replaced with the revision of the snap(s) installed on that unit, and `10008` is replaced with the revision of the charm code on that unit
 

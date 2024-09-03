@@ -360,7 +360,7 @@ postgresql-k8s/2  blocked          `juju refresh` was run with missing/incorrect
 
 The unit will also log an ERROR level message to `juju debug-log`. For example:
 ```
-unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` was run with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you are intentionally attempting to refresh to a PostgreSQL container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `check-workload-is-expected` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
+unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` was run with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you are intentionally attempting to refresh to a PostgreSQL container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `verify-workload-container` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
 where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
@@ -465,7 +465,7 @@ mysql-router-k8s/2   waiting   Router 8.0.37; Charm revision 10008
 where `Router 8.0.37` and `Router 8.0.36` are replaced with the name & version of the workload(s) installed on that unit and `10008` and `10007` are replaced with the revision of the charm code on that unit
 
 ###### Example: Refresh to unsupported workload version
-The user refreshed to an unsupported workload version (OCI image 68ed80) and forced the refresh to continue with `force-refresh-start check-workload-is-expected=false`. Unit 2 has refreshed. Units 1 and 0 have not refreshed.
+The user refreshed to an unsupported workload version (OCI image 68ed80) and forced the refresh to continue with `force-refresh-start verify-workload-container=false`. Unit 2 has refreshed. Units 1 and 0 have not refreshed.
 ```
 Unit               Workload  Message
 postgresql-k8s/0*  active    PostgreSQL 14.11 running (restart pending); Charm revision 10007
@@ -538,7 +538,7 @@ force-refresh-start:
         Potential of data loss and downtime
         
         If `false`, force refresh if app is unhealthy or not ready to refresh (and unit status shows "Pre-refresh check failed")
-    check-workload-is-expected:
+    verify-workload-container:
       type: boolean
       default: true
       description: |
@@ -567,12 +567,12 @@ Running operation 1 with 1 task
   - task 2 on unit-postgresql-k8s-2
 
 Waiting for task 2...
-Action id 2 failed: Must run with at least one of `check-compatibility`, `run-pre-refresh-checks`, or `check-workload-is-expected` parameters `=false`
+Action id 2 failed: Must run with at least one of `check-compatibility`, `run-pre-refresh-checks`, or `verify-workload-container` parameters `=false`
 ```
 
 ### If action ran with 1+ parameters as `false`
-#### Part 1: `check-workload-is-expected`
-##### If `check-workload-is-expected=true` and check successful
+#### Part 1: `verify-workload-container`
+##### If `verify-workload-container=true` and check successful
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
 Running operation 1 with 1 task
@@ -583,7 +583,7 @@ Waiting for task 2...
 ```
 where `PostgreSQL` is replaced with the name of the workload(s)
 
-##### (Kubernetes only) If `check-workload-is-expected=true` and check not successful
+##### (Kubernetes only) If `verify-workload-container=true` and check not successful
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
 Running operation 1 with 1 task
@@ -594,9 +594,9 @@ Action id 2 failed: Refresh is to PostgreSQL container version that has not been
 ```
 where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
-##### If `check-workload-is-expected=false`
+##### If `verify-workload-container=false`
 ```
-$ juju run postgresql-k8s/2 force-refresh-start [...] check-workload-is-expected=false
+$ juju run postgresql-k8s/2 force-refresh-start [...] verify-workload-container=false
 Running operation 1 with 1 task
   - task 2 on unit-postgresql-k8s-2
 
@@ -609,7 +609,7 @@ where `PostgreSQL` is replaced with the name of the workload(s)
 ##### If `check-compatibility=true` and check successful
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 12:15:34 Checked that refresh from previous PostgreSQL version and charm revision to current versions is compatible
 ```
 where `PostgreSQL` is replaced with the name of the workload(s)
@@ -617,7 +617,7 @@ where `PostgreSQL` is replaced with the name of the workload(s)
 ##### If `check-compatibility=true` and check not successful
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 ```
 Kubernetes
 ```
@@ -632,7 +632,7 @@ where `postgresql-k8s` is replaced with the Juju application name, `10007` is re
 ##### If `check-compatibility=false`
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...] check-compatibility=false
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 12:15:34 Skipping check for compatibility with previous PostgreSQL version and charm revision
 ```
 where `PostgreSQL` is replaced with the name of the workload(s)
@@ -641,7 +641,7 @@ where `PostgreSQL` is replaced with the name of the workload(s)
 ##### If `run-pre-refresh-checks=true` and check successful
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 [...]  # check-compatibility
 12:15:34 Running pre-refresh checks
 12:15:39 Pre-refresh checks successful
@@ -650,7 +650,7 @@ $ juju run postgresql-k8s/2 force-refresh-start [...]
 ##### If `run-pre-refresh-checks=true` and check not successful
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 [...]  # check-compatibility
 12:15:34 Running pre-refresh checks
 ```
@@ -667,7 +667,7 @@ where `Backup in progress` is replaced with a message that is specific to the pr
 ##### If `run-pre-refresh-checks=false`
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...] run-pre-refresh-checks=false
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 [...]  # check-compatibility
 12:15:39 Skipping pre-refresh checks
 ```
@@ -675,7 +675,7 @@ $ juju run postgresql-k8s/2 force-refresh-start [...] run-pre-refresh-checks=fal
 #### Part 4: If all checks that ran were successful (or no checks ran)
 ```
 $ juju run postgresql-k8s/2 force-refresh-start [...]
-[...]  # check-workload-is-expected
+[...]  # verify-workload-container
 [...]  # check-compatibility
 [...]  # run-pre-refresh-checks
 ```
@@ -722,7 +722,7 @@ resume-refresh:
         If `false`, force refresh (of next unit) if 1 or more refreshed units are unhealthy
         
         Warning: if first unit to refresh is unhealthy, consider running `force-refresh-start` action on that unit instead of using this parameter.
-        If first unit to refresh is unhealthy because compatibility checks, pre-refresh checks, or expected workload checks are failing, this parameter is more destructive than the `force-refresh-start` action.
+        If first unit to refresh is unhealthy because compatibility checks, pre-refresh checks, or workload container verification are failing, this parameter is more destructive than the `force-refresh-start` action.
   required: []
 ```
 

@@ -239,9 +239,9 @@ Waiting for task 2...
 result: |-
   Charm is ready for refresh. For refresh instructions, see https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro
   After the refresh has started, use this command to rollback (copy this down in case you need it later):
-  `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+  `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro` is replaced with the link to the charm's refresh documentation, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original (current) charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original (current) workload version
+where `https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro` is replaced with the link to the charm's refresh documentation, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original (current) charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original (current) workload version
 
 #### Machines
 ```
@@ -303,9 +303,9 @@ where `>=11` is replaced with the units that have refreshed or are currently ref
 
 During every Juju event, the leader unit will also log an INFO level message to `juju debug-log`. For example:
 ```
-unit-postgresql-0: 11:34:35 INFO unit.postgresql/0.juju-log Refresh in progress. To rollback, run `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+unit-postgresql-0: 11:34:35 INFO unit.postgresql/0.juju-log Refresh in progress. To rollback, run `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### Machines
 ```
@@ -360,9 +360,9 @@ postgresql-k8s/2  blocked          `juju refresh` was run with missing/incorrect
 
 The unit will also log an ERROR level message to `juju debug-log`. For example:
 ```
-unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` was run with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you are intentionally attempting to refresh to a PostgreSQL container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `check-workload-container` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
+unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` was run with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you are intentionally attempting to refresh to a PostgreSQL container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `check-workload-container` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### (Kubernetes only) If refresh is incompatible
 On Kubernetes, after the first unit refreshes and before that unit starts its workload, that unit (new charm code) checks if it supports refreshing from the previous workload & charm code version.
@@ -377,9 +377,9 @@ This status will only show on the first unit to refresh and only if the workload
 
 The unit will also log an INFO level message to `juju debug-log`. For example:
 ```
-unit-postgresql-k8s-2: 11:34:35 INFO unit.postgresql-k8s/2.juju-log Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
+unit-postgresql-k8s-2: 11:34:35 INFO unit.postgresql-k8s/2.juju-log Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If automatic pre-refresh health checks & preparations fail
 Regardless of whether the user runs the `pre-refresh-check` action before `juju refresh`, the charm will run pre-refresh health checks & preparations after `juju refresh`—unless it is a rollback.
@@ -400,9 +400,9 @@ The unit will also log an ERROR level message to `juju debug-log`. For example:
 
 Kubernetes
 ```
-unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
+unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
-where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 Machines
 ```
@@ -590,9 +590,9 @@ Running operation 1 with 1 task
   - task 2 on unit-postgresql-k8s-2
 
 Waiting for task 2...
-Action id 2 failed: Refresh is to PostgreSQL container version that has not been validated to work with the charm revision. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+Action id 2 failed: Refresh is to PostgreSQL container version that has not been validated to work with the charm revision. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If `check-workload-container=false`
 ```
@@ -621,13 +621,13 @@ $ juju run postgresql-k8s/2 force-refresh-start [...]
 ```
 Kubernetes
 ```
-Action id 2 failed: Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+Action id 2 failed: Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
 Machines
 ```
 Action id 2 failed: Refresh incompatible. Rollback with `juju refresh`
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If `check-compatibility=false`
 ```
@@ -656,13 +656,13 @@ $ juju run postgresql-k8s/2 force-refresh-start [...]
 ```
 Kubernetes
 ```
-Action id 2 failed: Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
+Action id 2 failed: Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
 Machines
 ```
 Action id 2 failed: Pre-refresh check failed: Backup in progress. Rollback with `juju refresh`
 ```
-where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `ghcr.io/canonical/charmed-postgresql@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If `run-pre-refresh-checks=false`
 ```

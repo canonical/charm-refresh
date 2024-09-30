@@ -1,1 +1,10 @@
-from ._main import CharmSpecific, CharmVersion, Cloud, PrecheckFailed, Refresh
+from ._main import (
+    CharmSpecific,
+    CharmVersion,
+    Cloud,
+    KubernetesJujuAppNotTrusted,
+    PeerRelationMissing,
+    PrecheckFailed,
+    Refresh,
+    UnitTearingDown,
+)

@@ -53,7 +53,8 @@ class CharmVersion:
 
         if "!" in pep440_version:
             raise ValueError(
-                f"Invalid charm version {repr(str(self))}. PEP 440 epoch ('!' character) not supported"
+                f"Invalid charm version {repr(str(self))}. PEP 440 epoch ('!' character) not "
+                "supported"
             )
         try:
             self._pep440_version = packaging.version.Version(pep440_version)
@@ -61,7 +62,9 @@ class CharmVersion:
             raise ValueError(f"Invalid charm version {repr(str(self))}")
         if len(self._pep440_version.release) != 3:
             raise ValueError(
-                f"Invalid charm version {repr(str(self))}. Expected 3 number components after track; got {len(self._pep440_version.release)} components instead: {repr(self._pep440_version.base_version)}"
+                f"Invalid charm version {repr(str(self))}. Expected 3 number components after "
+                f"track; got {len(self._pep440_version.release)} components instead: "
+                f"{repr(self._pep440_version.base_version)}"
             )
         # Example 1: True
         # Example 2: False
@@ -101,7 +104,8 @@ class CharmVersion:
             return NotImplemented
         if self.track != other.track:
             raise ValueError(
-                f"Unable to compare versions with different tracks: {repr(self.track)} and {repr(other.track)} ({repr(self)} and {repr(other)})"
+                f"Unable to compare versions with different tracks: {repr(self.track)} and "
+                f"{repr(other.track)} ({repr(self)} and {repr(other)})"
             )
         return self._pep440_version > other._pep440_version
 
@@ -676,7 +680,8 @@ class _RefreshVersions:
 class _OriginalVersions:
     """Versions (of all units) immediately after the last completed refresh
 
-    Or, if no completed refreshes, immediately after juju deploy and (on machines) initial installation
+    Or, if no completed refreshes, immediately after juju deploy and (on machines) initial
+    installation
     """
 
     workload: typing.Optional[str]
@@ -700,14 +705,16 @@ class _OriginalVersions:
     def __post_init__(self):
         if self.installed_workload_container_matched_pinned_container and self.workload is None:
             raise ValueError(
-                "`workload` cannot be `None` if `installed_workload_container_matched_pinned_container` is `True`"
+                "`workload` cannot be `None` if "
+                "`installed_workload_container_matched_pinned_container` is `True`"
             )
         elif (
             not self.installed_workload_container_matched_pinned_container
             and self.workload is not None
         ):
             raise ValueError(
-                "`workload` must be `None` if `installed_workload_container_matched_pinned_container` is `False`"
+                "`workload` must be `None` if "
+                "`installed_workload_container_matched_pinned_container` is `False`"
             )
 
     @classmethod
@@ -725,7 +732,8 @@ class _OriginalVersions:
         except (KeyError, ValueError):
             # This should only happen if user refreshes from a charm without refresh v3
             raise ValueError(
-                "Refresh failed. Automatic recovery not possible. Original versions in app databag are missing or invalid"
+                "Refresh failed. Automatic recovery not possible. Original versions in app "
+                "databag are missing or invalid"
             )
 
     def write_to_app_databag(self, databag: collections.abc.MutableMapping, /):
@@ -747,7 +755,10 @@ class _KubernetesUnit(charm.Unit):
         return instance
 
     def __repr__(self):
-        return f"{type(self).__name__}({repr(str(self))}, controller_revision={repr(self.controller_revision)}, pod_uid={repr(self.pod_uid)})"
+        return (
+            f"{type(self).__name__}({repr(str(self))}, "
+            f"controller_revision={repr(self.controller_revision)}, pod_uid={repr(self.pod_uid)})"
+        )
 
     @classmethod
     def from_pod(cls, pod: lightkube.resources.core_v1.Pod, /):
@@ -859,10 +870,13 @@ class _Kubernetes:
             message += f"; Charm version {self._installed_charm_version}"
         if not workload_container_matches_pin:
             if self._installed_workload_container_version:
-                message += f'; Unexpected container {self._installed_workload_container_version.removeprefix("sha256:")[:6]}'
+                message += (
+                    "; Unexpected container "
+                    f'{self._installed_workload_container_version.removeprefix("sha256:")[:6]}'
+                )
             else:
-                # This message is unlikely to be displayed—the status will probably be overridden by
-                # a Kubernetes ImagePullBackOff error
+                # This message is unlikely to be displayed—the status will probably be overridden
+                # by a Kubernetes ImagePullBackOff error
                 message += "; Unable to check container"
         if workload_is_running:
             return charm.ActiveStatus(message)
@@ -918,7 +932,7 @@ class _Kubernetes:
         )
 
     def _start_refresh(self):
-        """Run automatic checks after `juju refresh` on highest number unit and set `self._refresh_started`
+        """Run automatic checks after `juju refresh` on highest unit & set `self._refresh_started`
 
         Automatic checks include:
 
@@ -977,7 +991,9 @@ class _Kubernetes:
                         break
                 else:
                     event.fail(
-                        "Must run with at least one of `check-compatibility`, `run-pre-refresh-checks`, or `check-workload-container` parameters `=false`"
+                        "Must run with at least one of `check-compatibility`, "
+                        "`run-pre-refresh-checks`, or `check-workload-container` parameters "
+                        "`=false`"
                     )
                     raise _InvalidForceEvent
 
@@ -1048,10 +1064,15 @@ class _Kubernetes:
 
         # Run automatic checks
         charm_revision = original_versions.charm_revision_raw.split("-")[-1]
-        rollback_command = f"juju refresh {charm.app} --revision {charm_revision} --resource {self._charm_specific.oci_resource_name}={self._installed_workload_image_name}@{original_versions.workload_container}"
+        rollback_command = (
+            f"juju refresh {charm.app} --revision {charm_revision} --resource "
+            f"{self._charm_specific.oci_resource_name}={self._installed_workload_image_name}@"
+            f"{original_versions.workload_container}"
+        )
         if force_start and not force_start.check_workload_container:
             force_start.log(
-                f"Skipping check that refresh is to {self._charm_specific.workload_name} container version that has been validated to work with the charm revision"
+                f"Skipping check that refresh is to {self._charm_specific.workload_name} "
+                "container version that has been validated to work with the charm revision"
             )
         else:
             # Check workload container
@@ -1061,23 +1082,35 @@ class _Kubernetes:
             ):
                 if force_start:
                     force_start.log(
-                        f"Checked that refresh is to {self._charm_specific.workload_name} container version that has been validated to work with the charm revision"
+                        f"Checked that refresh is to {self._charm_specific.workload_name}"
+                        "container version that has been validated to work with the charm revision"
                     )
             else:
                 self._unit_status_higher_priority = charm.BlockedStatus(
-                    "`juju refresh` was run with missing/incorrect OCI resource. Rollback with instructions in docs or see `juju debug-log`"
+                    "`juju refresh` was run with missing/incorrect OCI resource. Rollback with "
+                    "instructions in docs or see `juju debug-log`"
                 )
                 logger.error(
-                    f"`juju refresh` was run with missing or incorrect OCI resource. Rollback by running `{rollback_command}`. If you are intentionally attempting to refresh to a {self._charm_specific.workload_name} container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `check-workload-container` parameter. Run `juju show-action {charm.app} force-refresh-start` for more information"
+                    "`juju refresh` was run with missing or incorrect OCI resource. Rollback by "
+                    f"running `{rollback_command}`. If you are intentionally attempting to "
+                    f"refresh to a {self._charm_specific.workload_name} container version that is "
+                    "not validated with this release, you may experience data loss and/or "
+                    "downtime as a result of refreshing. The refresh can be forced to continue "
+                    "with the `force-refresh-start` action and the `check-workload-container` "
+                    f"parameter. Run `juju show-action {charm.app} force-refresh-start` for more "
+                    "information"
                 )
                 if force_start:
                     force_start.fail(
-                        f"Refresh is to {self._charm_specific.workload_name} container version that has not been validated to work with the charm revision. Rollback by running `{rollback_command}`"
+                        f"Refresh is to {self._charm_specific.workload_name} container version "
+                        "that has not been validated to work with the charm revision. Rollback by "
+                        f"running `{rollback_command}`"
                     )
                 return
         if force_start and not force_start.check_compatibility:
             force_start.log(
-                f"Skipping check for compatibility with previous {self._charm_specific.workload_name} version and charm revision"
+                "Skipping check for compatibility with previous "
+                f"{self._charm_specific.workload_name} version and charm revision"
             )
         else:
             # Check compatibility
@@ -1102,14 +1135,20 @@ class _Kubernetes:
             ):
                 if force_start:
                     force_start.log(
-                        f"Checked that refresh from previous {self._charm_specific.workload_name} version and charm revision to current versions is compatible"
+                        f"Checked that refresh from previous {self._charm_specific.workload_name} "
+                        "version and charm revision to current versions is compatible"
                     )
             else:
                 self._unit_status_higher_priority = charm.BlockedStatus(
-                    "Refresh incompatible. Rollback with instructions in Charmhub docs or see `juju debug-log`"
+                    "Refresh incompatible. Rollback with instructions in Charmhub docs or see "
+                    "`juju debug-log`"
                 )
                 logger.info(
-                    f"Refresh incompatible. Rollback by running `{rollback_command}`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action {charm.app} force-refresh-start` for more information"
+                    f"Refresh incompatible. Rollback by running `{rollback_command}`. Continuing "
+                    "this refresh may cause data loss and/or downtime. The refresh can be forced "
+                    "to continue with the `force-refresh-start` action and the "
+                    f"`check-compatibility` parameter. Run `juju show-action {charm.app} "
+                    "force-refresh-start` for more information"
                 )
                 if force_start:
                     force_start.fail(
@@ -1129,11 +1168,16 @@ class _Kubernetes:
                     f"Rollback with `juju refresh`. Pre-refresh check failed: {exception.message}"
                 )
                 logger.error(
-                    f"Pre-refresh check failed: {exception.message}. Rollback by running `{rollback_command}`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run `juju show-action {charm.app} force-refresh-start` for more information"
+                    f"Pre-refresh check failed: {exception.message}. Rollback by running "
+                    f"`{rollback_command}`. Continuing this refresh may cause data loss and/or "
+                    "downtime. The refresh can be forced to continue with the "
+                    "`force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run "
+                    f"`juju show-action {charm.app} force-refresh-start` for more information"
                 )
                 if force_start:
                     force_start.fail(
-                        f"Pre-refresh check failed: {exception.message}. Rollback by running `{rollback_command}`"
+                        f"Pre-refresh check failed: {exception.message}. Rollback by running "
+                        f"`{rollback_command}`"
                     )
                 return
             if force_start:
@@ -1148,7 +1192,11 @@ class _Kubernetes:
         self._refresh_started_local_state.touch()
         if force_start:
             force_start.result = {
-                "result": f"{self._charm_specific.workload_name} refreshed on unit {charm.unit.number}. Starting {self._charm_specific.workload_name} on unit {charm.unit.number}"
+                "result": (
+                    f"{self._charm_specific.workload_name} refreshed on unit "
+                    f"{charm.unit.number}. Starting {self._charm_specific.workload_name} on unit "
+                    f"{charm.unit.number}"
+                )
             }
 
     def _set_partition_and_app_status(self, *, handle_action: bool):
@@ -1178,7 +1226,8 @@ class _Kubernetes:
         if not charm.is_leader:
             if handle_action and action:
                 action.fail(
-                    f"Must run action on leader unit. (e.g. `juju run {charm.app}/leader resume-refresh`)"
+                    f"Must run action on leader unit. (e.g. `juju run {charm.app}/leader "
+                    "resume-refresh`)"
                 )
             return
         if self._pause_after is _PauseAfter.UNKNOWN:
@@ -1201,7 +1250,8 @@ class _Kubernetes:
             and action.check_health_of_refreshed_units
         ):
             action.fail(
-                "`pause_after_unit_refresh` config is set to `none`. This action is not applicable."
+                "`pause_after_unit_refresh` config is set to `none`. This action is not "
+                "applicable."
             )
             # Do not log any additional information to action output
             action = None
@@ -1266,7 +1316,10 @@ class _Kubernetes:
                         assert self._pause_after is not _PauseAfter.NONE
                         if self._pause_after is _PauseAfter.FIRST:
                             action.result = {
-                                "result": f"Refresh resumed. Unit {next_unit_to_refresh.number} is refreshing next"
+                                "result": (
+                                    f"Refresh resumed. Unit {next_unit_to_refresh.number} "
+                                    "is refreshing next"
+                                )
                             }
                         else:
                             assert (
@@ -1303,7 +1356,10 @@ class _Kubernetes:
             if units_tearing_down := [
                 unit for unit in self._units if unit not in self._units_not_tearing_down
             ]:
-                message += f'. Computed by excluding units that are tearing down: {", ".join(str(unit.number) for unit in units_tearing_down)}'
+                message += (
+                    ". Computed by excluding units that are tearing down: "
+                    f'{", ".join(str(unit.number) for unit in units_tearing_down)}'
+                )
             logger.info(message)
         if self._pause_after is _PauseAfter.ALL or (
             self._pause_after is _PauseAfter.FIRST
@@ -1311,11 +1367,13 @@ class _Kubernetes:
             and partition >= self._units_not_tearing_down[0].number
         ):
             self._app_status_higher_priority = charm.BlockedStatus(
-                f"Refreshing. Check units >={partition} are healthy & run `resume-refresh` on leader. To rollback, see docs or `juju debug-log`"
+                f"Refreshing. Check units >={partition} are healthy & run `resume-refresh` on "
+                "leader. To rollback, see docs or `juju debug-log`"
             )
         else:
             self._app_status_higher_priority = charm.MaintenanceStatus(
-                f"Refreshing. To pause refresh, run `juju config {charm.app} pause_after_unit_refresh=all`"
+                f"Refreshing. To pause refresh, run `juju config {charm.app} "
+                "pause_after_unit_refresh=all`"
             )
         assert self._app_status_higher_priority is not None
         charm.app_status = self._app_status_higher_priority
@@ -1528,7 +1586,8 @@ class _Kubernetes:
                 "refresh_started_if_app_controller_revision_hash_in", tuple()
             )
             for unit in self._units:
-                # During scale up, scale down, or initial install, `unit` may be missing from relation
+                # During scale up, scale down, or initial install, `unit` may be missing from
+                # relation
                 for hash_ in self._relation.get(unit, {}).get(
                     "refresh_started_if_app_controller_revision_hash_in", tuple()
                 ):
@@ -1559,7 +1618,8 @@ class _Kubernetes:
         )
         if not isinstance(upstream_source, str):
             raise ValueError(
-                f"Unable to find `upstream-source` for {self._charm_specific.oci_resource_name=} resource in metadata.yaml `resources`"
+                f"Unable to find `upstream-source` for {self._charm_specific.oci_resource_name=} "
+                "resource in metadata.yaml `resources`"
             )
         try:
             _, digest = upstream_source.split("@")
@@ -1567,7 +1627,9 @@ class _Kubernetes:
                 raise ValueError
         except ValueError:
             raise ValueError(
-                f"OCI image in `upstream-source` must be pinned to a digest (e.g. ends with '@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6'): {repr(upstream_source)}"
+                f"OCI image in `upstream-source` must be pinned to a digest (e.g. ends with "
+                "'@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6'): "
+                f"{repr(upstream_source)}"
             )
         else:
             self._pinned_workload_container_version = digest
@@ -1582,11 +1644,14 @@ class _Kubernetes:
         ]
         if len(workload_containers) == 0:
             raise ValueError(
-                f"Unable to find workload container with {self._charm_specific.oci_resource_name=} in metadata.yaml `containers`"
+                "Unable to find workload container with "
+                f"{self._charm_specific.oci_resource_name=} in metadata.yaml `containers`"
             )
         elif len(workload_containers) > 1:
             raise ValueError(
-                f"Expected 1 container. Found {len(workload_containers)} workload containers with {self._charm_specific.oci_resource_name=} in metadata.yaml `containers`: {repr(workload_containers)}"
+                f"Expected 1 container. Found {len(workload_containers)} workload containers with "
+                f"{self._charm_specific.oci_resource_name=} in metadata.yaml `containers`: "
+                f"{repr(workload_containers)}"
             )
         else:
             workload_container = workload_containers[0]
@@ -1612,7 +1677,8 @@ class _Kubernetes:
                 raise _InstalledWorkloadContainerDigestNotAvailable
             if len(workload_container_statuses) > 1:
                 raise ValueError(
-                    f"Found multiple {workload_container} containers for this unit's pod. Expected 1 container"
+                    f"Found multiple {workload_container} containers for this unit's pod. "
+                    "Expected 1 container"
                 )
             # Example: "registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6"
             image_id = workload_container_statuses[0].imageID
@@ -1711,17 +1777,27 @@ class _Kubernetes:
                     self._charm_specific.run_pre_refresh_checks_before_any_units_refreshed()
                 except PrecheckFailed as exception:
                     charm.event.fail(
-                        f"Charm is not ready for refresh. Pre-refresh check failed: {exception.message}"
+                        "Charm is not ready for refresh. Pre-refresh check failed: "
+                        f"{exception.message}"
                     )
                 else:
                     charm.event.result = {
-                        "result": f"Charm is ready for refresh. For refresh instructions, see {self._charm_specific.refresh_user_docs_url}\n"
-                        "After the refresh has started, use this command to rollback (copy this down in case you need it later):\n"
-                        f'`juju refresh {charm.app} --revision {self._original_versions.charm_revision_raw.split("-")[-1]} --resource {self._charm_specific.oci_resource_name}={self._installed_workload_image_name}@{self._original_versions.workload_container}`'
+                        "result": (
+                            "Charm is ready for refresh. For refresh instructions, see "
+                            f"{self._charm_specific.refresh_user_docs_url}\n"
+                            "After the refresh has started, use this command to rollback (copy "
+                            "this down in case you need it later):\n"
+                            f"`juju refresh {charm.app} --revision "
+                            f'{self._original_versions.charm_revision_raw.split("-")[-1]} '
+                            f"--resource {self._charm_specific.oci_resource_name}="
+                            f"{self._installed_workload_image_name}@"
+                            f"{self._original_versions.workload_container}`"
+                        )
                     }
             else:
                 charm.event.fail(
-                    f"Must run action on leader unit. (e.g. `juju run {charm.app}/leader pre-refresh-check`)"
+                    f"Must run action on leader unit. (e.g. `juju run {charm.app}/leader "
+                    "pre-refresh-check`)"
                 )
 
         self._start_refresh()

@@ -1074,9 +1074,9 @@ class _Kubernetes:
                     f"Unit {charm.unit.number} has not yet refreshed to latest app revision"
                 )  # TODO UX
             return
+        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
         if not self._refresh_started:
             # Check if this unit is rolling back
-            original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
             if (
                 original_versions.charm == self._installed_charm_version
                 and original_versions.workload_container
@@ -1125,7 +1125,6 @@ class _Kubernetes:
         # Run automatic checks
 
         # Log workload & charm versions we're refreshing from & to
-        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
         from_to_message = f"from {self._charm_specific.workload_name} "
         if original_versions.installed_workload_container_matched_pinned_container:
             from_to_message += (
@@ -1175,12 +1174,6 @@ class _Kubernetes:
             f"{self._unit_controller_revision}) {from_to_message}"
         )
 
-        rollback_command = (
-            f"juju refresh {charm.app} --revision "
-            f"{original_versions.charm_revision_raw.charmhub_revision} --resource "
-            f"{self._charm_specific.oci_resource_name}={self._installed_workload_image_name}@"
-            f"{original_versions.workload_container}"
-        )
         if force_start and not force_start.check_workload_container:
             force_start.log(
                 f"Skipping check that refresh is to {self._charm_specific.workload_name} "
@@ -1209,7 +1202,7 @@ class _Kubernetes:
                 )
                 logger.error(
                     "`juju refresh` was run with missing or incorrect OCI resource. Rollback by "
-                    f"running `{rollback_command}`. If you are intentionally attempting to "
+                    f"running `{self._rollback_command}`. If you are intentionally attempting to "
                     f"refresh to a {self._charm_specific.workload_name} container version that is "
                     "not validated with this release, you may experience data loss and/or "
                     "downtime as a result of refreshing. The refresh can be forced to continue "
@@ -1221,7 +1214,7 @@ class _Kubernetes:
                     force_start.fail(
                         f"Refresh is to {self._charm_specific.workload_name} container version "
                         "that has not been validated to work with the charm revision. Rollback by "
-                        f"running `{rollback_command}`"
+                        f"running `{self._rollback_command}`"
                     )
                 return
         if force_start and not force_start.check_compatibility:
@@ -1298,15 +1291,15 @@ class _Kubernetes:
                     "`juju debug-log`"
                 )
                 logger.info(
-                    f"Refresh incompatible. Rollback by running `{rollback_command}`. Continuing "
-                    "this refresh may cause data loss and/or downtime. The refresh can be forced "
-                    "to continue with the `force-refresh-start` action and the "
+                    f"Refresh incompatible. Rollback by running `{self._rollback_command}`. "
+                    "Continuing this refresh may cause data loss and/or downtime. The refresh can "
+                    "be forced to continue with the `force-refresh-start` action and the "
                     f"`check-compatibility` parameter. Run `juju show-action {charm.app} "
                     "force-refresh-start` for more information"
                 )
                 if force_start:
                     force_start.fail(
-                        f"Refresh incompatible. Rollback by running `{rollback_command}`"
+                        f"Refresh incompatible. Rollback by running `{self._rollback_command}`"
                     )
                 return
         if force_start and not force_start.run_pre_refresh_checks:
@@ -1323,15 +1316,15 @@ class _Kubernetes:
                 )
                 logger.error(
                     f"Pre-refresh check failed: {exception.message}. Rollback by running "
-                    f"`{rollback_command}`. Continuing this refresh may cause data loss and/or "
-                    "downtime. The refresh can be forced to continue with the "
+                    f"`{self._rollback_command}`. Continuing this refresh may cause data loss "
+                    "and/or downtime. The refresh can be forced to continue with the "
                     "`force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run "
                     f"`juju show-action {charm.app} force-refresh-start` for more information"
                 )
                 if force_start:
                     force_start.fail(
                         f"Pre-refresh check failed: {exception.message}. Rollback by running "
-                        f"`{rollback_command}`"
+                        f"`{self._rollback_command}`"
                     )
                 return
             if force_start:
@@ -1955,12 +1948,24 @@ class _Kubernetes:
                         "refresh). Will retry next Juju event"
                     )
 
+        if self._in_progress or charm.is_leader:
+            original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
+            self._rollback_command = (
+                f"juju refresh {charm.app} --revision "
+                f"{original_versions.charm_revision_raw.charmhub_revision} --resource "
+                f"{self._charm_specific.oci_resource_name}={self._installed_workload_image_name}@"
+                f"{original_versions.workload_container}"
+            )
+
+        if self._in_progress:
+            logger.info(f"Refresh in progress. To rollback, run `{self._rollback_command}`")
+
         # pre-refresh-check action
         if isinstance(charm.event, charm.ActionEvent) and charm.event.action == "pre-refresh-check":
             if self._in_progress:
                 charm.event.fail("Refresh already in progress")
             elif charm.is_leader:
-                assert self._original_versions
+                assert self._rollback_command
                 try:
                     self._charm_specific.run_pre_refresh_checks_before_any_units_refreshed()
                 except PrecheckFailed as exception:
@@ -1975,11 +1980,7 @@ class _Kubernetes:
                             f"{self._charm_specific.refresh_user_docs_url}\n"
                             "After the refresh has started, use this command to rollback (copy "
                             "this down in case you need it later):\n"
-                            f"`juju refresh {charm.app} --revision "
-                            f"{self._original_versions.charm_revision_raw.charmhub_revision} "
-                            f"--resource {self._charm_specific.oci_resource_name}="
-                            f"{self._installed_workload_image_name}@"
-                            f"{self._original_versions.workload_container}`"
+                            f"`{self._rollback_command}`"
                         )
                     }
                     logger.info("Pre-refresh check succeeded")

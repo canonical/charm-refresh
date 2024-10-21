@@ -825,6 +825,11 @@ class _Kubernetes:
     def next_unit_allowed_to_refresh(self, value: typing.Literal[True]):
         if value is not True:
             raise ValueError("`next_unit_allowed_to_refresh` can only be set to `True`")
+        if not self.workload_allowed_to_start:
+            raise Exception(
+                "`next_unit_allowed_to_refresh` cannot be set to `True` when "
+                "`workload_allowed_to_start` is `False`"
+            )
         if (
             self._relation.my_unit.get(
                 "next_unit_allowed_to_refresh_if_app_controller_revision_hash_equals"

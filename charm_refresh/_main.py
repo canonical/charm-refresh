@@ -676,6 +676,20 @@ class _RefreshVersions:
             raise ValueError("Invalid charm version in refresh_versions.toml")
 
 
+class _RawCharmRevision(str):
+    """Charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+
+    @classmethod
+    def from_file(cls):
+        """Charm revision in this unit's .juju-charm file"""
+        return cls(pathlib.Path(".juju-charm").read_text().strip())
+
+    @property
+    def charmhub_revision(self) -> typing.Optional[str]:
+        if self.startswith("ch:"):
+            return self.split("-")[-1]
+
+
 @dataclasses.dataclass(frozen=True)
 class _OriginalVersions:
     """Versions (of all units) immediately after the last completed refresh
@@ -699,7 +713,7 @@ class _OriginalVersions:
     """Whether original workload container matched container pinned in original charm code"""
     charm: CharmVersion
     """Original charm version"""
-    charm_revision_raw: str
+    charm_revision_raw: _RawCharmRevision
     """Original charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
 
     def __post_init__(self):
@@ -727,7 +741,7 @@ class _OriginalVersions:
                     "original_installed_workload_container_matched_pinned_container"
                 ],
                 charm=CharmVersion(databag["original_charm_version"]),
-                charm_revision_raw=databag["original_charm_revision"],
+                charm_revision_raw=_RawCharmRevision(databag["original_charm_revision"]),
             )
         except (KeyError, ValueError):
             # This should only happen if user refreshes from a charm without refresh v3
@@ -737,14 +751,22 @@ class _OriginalVersions:
             )
 
     def write_to_app_databag(self, databag: collections.abc.MutableMapping, /):
-        databag["original_workload_version"] = self.workload
-        databag["original_workload_container_version"] = self.workload_container
-        databag["original_installed_workload_container_matched_pinned_container"] = (
-            self.installed_workload_container_matched_pinned_container
-        )
-        databag["original_charm_version"] = str(self.charm)
-        databag["original_charm_revision"] = self.charm_revision_raw
-        # TODO log?
+        new_values = {
+            "original_workload_version": self.workload,
+            "original_workload_container_version": self.workload_container,
+            "original_installed_workload_container_matched_pinned_container": self.installed_workload_container_matched_pinned_container,
+            "original_charm_version": str(self.charm),
+            "original_charm_revision": self.charm_revision_raw,
+        }
+        for key, value in new_values.items():
+            if databag.get(key) != value:
+                diff = True
+                break
+        else:
+            diff = False
+        databag.update(new_values)
+        if diff:
+            logger.info("Saved versions to app databag for next refresh")
 
 
 class _KubernetesUnit(charm.Unit):
@@ -803,10 +825,21 @@ class _Kubernetes:
     def next_unit_allowed_to_refresh(self, value: typing.Literal[True]):
         if value is not True:
             raise ValueError("`next_unit_allowed_to_refresh` can only be set to `True`")
-        self._relation.my_unit[
-            "next_unit_allowed_to_refresh_if_app_controller_revision_hash_equals"
-        ] = self._unit_controller_revision
-        self._set_partition_and_app_status(handle_action=False)
+        if (
+            self._relation.my_unit.get(
+                "next_unit_allowed_to_refresh_if_app_controller_revision_hash_equals"
+            )
+            != self._unit_controller_revision
+        ):
+            logger.info(
+                "Allowed next unit to refresh if app's StatefulSet controller revision is "
+                f"{self._unit_controller_revision} and if permitted by pause_after_unit_refresh "
+                "config option or resume-refresh action"
+            )
+            self._relation.my_unit[
+                "next_unit_allowed_to_refresh_if_app_controller_revision_hash_equals"
+            ] = self._unit_controller_revision
+            self._set_partition_and_app_status(handle_action=False)
 
     @property
     def workload_allowed_to_start(self) -> bool:
@@ -862,9 +895,9 @@ class _Kubernetes:
             message += " running"
         if self._unit_controller_revision != self._app_controller_revision:
             message += " (restart pending)"
-        if self._installed_charm_revision_raw.startswith("ch:"):
+        if self._installed_charm_revision_raw.charmhub_revision:
             # Charm was deployed from Charmhub; use revision
-            message += f'; Charm revision {self._installed_charm_revision_raw.split("-")[-1]}'
+            message += f"; Charm revision {self._installed_charm_revision_raw.charmhub_revision}"
         else:
             # Charmhub revision is not available; fall back to charm version
             message += f"; Charm version {self._installed_charm_version}"
@@ -1050,6 +1083,33 @@ class _Kubernetes:
                 == self._installed_workload_container_version
             ):
                 # Rollback to original charm code & workload container version; skip checks
+
+                if (
+                    self._installed_workload_container_version
+                    == self._pinned_workload_container_version
+                ):
+                    workload_version = (
+                        f"{self._charm_specific.workload_name} {self._pinned_workload_version} "
+                        f"(container {repr(self._installed_workload_container_version)})"
+                    )
+                else:
+                    workload_version = (
+                        f"{self._charm_specific.workload_name} container "
+                        f"{repr(self._installed_workload_container_version)}"
+                    )
+                if self._installed_charm_revision_raw.charmhub_revision:
+                    charm_version = (
+                        f"revision {self._installed_charm_revision_raw.charmhub_revision} "
+                        f"({repr(self._installed_charm_version)})"
+                    )
+                else:
+                    charm_version = f"{repr(self._installed_charm_version)}"
+                logger.info(
+                    "Rollback detected. Automatic refresh checks skipped. Refresh started for "
+                    f"StatefulSet controller revision {self._unit_controller_revision}. Rolling "
+                    f"back to {workload_version} and charm {charm_version}"
+                )
+
                 self._refresh_started = True
                 hashes: typing.MutableSequence[str] = self._relation.my_unit.setdefault(
                     "refresh_started_if_app_controller_revision_hash_in", tuple()
@@ -1063,9 +1123,61 @@ class _Kubernetes:
             return
 
         # Run automatic checks
-        charm_revision = original_versions.charm_revision_raw.split("-")[-1]
+
+        # Log workload & charm versions we're refreshing from & to
+        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
+        from_to_message = f"from {self._charm_specific.workload_name} "
+        if original_versions.installed_workload_container_matched_pinned_container:
+            from_to_message += (
+                f"{original_versions.workload} (container "
+                f"{repr(original_versions.workload_container)}) "
+            )
+        else:
+            from_to_message += f"container {repr(original_versions.workload_container)} "
+        from_to_message += "and charm "
+        if original_versions.charm_revision_raw.charmhub_revision:
+            from_to_message += (
+                f"revision {original_versions.charm_revision_raw.charmhub_revision} "
+                f"({repr(original_versions.charm)}) "
+            )
+        else:
+            from_to_message += f"{repr(original_versions.charm)} "
+        from_to_message += f"to {self._charm_specific.workload_name} "
+        if self._installed_workload_container_version == self._pinned_workload_container_version:
+            from_to_message += (
+                f"{self._pinned_workload_version} (container "
+                f"{repr(self._installed_workload_container_version)}) "
+            )
+        else:
+            from_to_message += f"container {repr(self._installed_workload_container_version)} "
+        from_to_message += "and charm "
+        if self._installed_charm_revision_raw.charmhub_revision:
+            from_to_message += (
+                f"revision {self._installed_charm_revision_raw.charmhub_revision} "
+                f"({repr(self._installed_charm_version)})"
+            )
+        else:
+            from_to_message += f"{repr(self._installed_charm_version)}"
+        if force_start:
+            false_values = []
+            if not force_start.check_workload_container:
+                false_values.append("check-workload-container")
+            if not force_start.check_compatibility:
+                false_values.append("check-compatibility")
+            if not force_start.run_pre_refresh_checks:
+                false_values.append("run-pre-refresh-checks")
+            from_to_message += (
+                ". force-refresh-start action ran with "
+                f'{" ".join(f"{value}=false" for value in false_values)}'
+            )
+        logger.info(
+            f"Attempting to start refresh (for StatefulSet controller revision "
+            f"{self._unit_controller_revision}) {from_to_message}"
+        )
+
         rollback_command = (
-            f"juju refresh {charm.app} --revision {charm_revision} --resource "
+            f"juju refresh {charm.app} --revision "
+            f"{original_versions.charm_revision_raw.charmhub_revision} --resource "
             f"{self._charm_specific.oci_resource_name}={self._installed_workload_image_name}@"
             f"{original_versions.workload_container}"
         )
@@ -1086,6 +1198,11 @@ class _Kubernetes:
                         "container version that has been validated to work with the charm revision"
                     )
             else:
+                logger.info(
+                    f"Expected {self._charm_specific.workload_name} container digest "
+                    f"{repr(self._pinned_workload_container_version)}, got "
+                    f"{repr(self._installed_workload_container_version)} instead"
+                )
                 self._unit_status_higher_priority = charm.BlockedStatus(
                     "`juju refresh` was run with missing/incorrect OCI resource. Rollback with "
                     "instructions in docs or see `juju debug-log`"
@@ -1139,6 +1256,43 @@ class _Kubernetes:
                         "version and charm revision to current versions is compatible"
                     )
             else:
+                # Log reason why compatibility check failed
+                if not original_versions.installed_workload_container_matched_pinned_container:
+                    if original_versions.charm_revision_raw.charmhub_revision:
+                        # Charm was deployed from Charmhub; use revision
+                        charm_version = (
+                            f"revision {original_versions.charm_revision_raw.charmhub_revision}"
+                        )
+                    else:
+                        # Charmhub revision is not available; fall back to charm version
+                        charm_version = f"{repr(original_versions.charm)}"
+                    logger.info(
+                        "Refresh incompatible because original "
+                        f"{self._charm_specific.workload_name} container version "
+                        f"({repr(original_versions.workload_container)}) did not match container "
+                        f"pinned in original charm ({charm_version})"
+                    )
+                elif (
+                    self._installed_workload_container_version
+                    != self._pinned_workload_container_version
+                ):
+                    logger.info(
+                        f"Refresh incompatible because {self._charm_specific.workload_name} "
+                        f"container version ({repr(self._installed_workload_container_version)}) "
+                        "does not match container pinned in charm "
+                        f"({repr(self._pinned_workload_container_version)})"
+                    )
+                else:
+                    logger.info(
+                        "Refresh incompatible because new version of "
+                        f"{self._charm_specific.workload_name} "
+                        f"({repr(self._pinned_workload_version)}) and/or charm "
+                        f"({repr(self._installed_charm_version)}) is not compatible with previous "
+                        f"version of {self._charm_specific.workload_name} "
+                        f"({repr(original_versions.workload)}) and/or charm "
+                        f"({repr(original_versions.charm)})"
+                    )
+
                 self._unit_status_higher_priority = charm.BlockedStatus(
                     "Refresh incompatible. Rollback with instructions in Charmhub docs or see "
                     "`juju debug-log`"
@@ -1183,6 +1337,11 @@ class _Kubernetes:
             if force_start:
                 force_start.log("Pre-refresh checks successful")
         # All checks that ran succeeded
+        logger.info(
+            f'Automatic checks succeeded{" or skipped" if force_start else ""}. Refresh started '
+            f"for StatefulSet controller revision {self._unit_controller_revision}. Starting "
+            f"{self._charm_specific.workload_name} on this unit. Refresh is {from_to_message}"
+        )
         self._refresh_started = True
         hashes: typing.MutableSequence[str] = self._relation.my_unit.setdefault(
             "refresh_started_if_app_controller_revision_hash_in", tuple()
@@ -1268,9 +1427,10 @@ class _Kubernetes:
         next_unit_to_refresh = unit
         next_unit_to_refresh_index = index
 
-        # Determine if `next_unit_to_refresh` is allowed to refresh
+        # Determine if `next_unit_to_refresh` is allowed to refresh and the `reason` why/why not
         if action and not action.check_health_of_refreshed_units:
             allow_next_unit_to_refresh = True
+            reason = "resume-refresh action ran with check-health-of-refreshed-units=false"
             if handle_action:
                 action.log("Ignoring health of refreshed units")
                 # Include "Attempting to" since we only control the partition, not which units
@@ -1283,6 +1443,10 @@ class _Kubernetes:
                 }
         elif not self._refresh_started:
             allow_next_unit_to_refresh = False
+            reason = (
+                "highest number unit's workload has not started for StatefulSet controller "
+                f"revision {self._app_controller_revision}"
+            )
             if handle_action and action:
                 assert action.check_health_of_refreshed_units
                 # TODO UX: change message to refresh not started? (for scale up case)
@@ -1300,6 +1464,7 @@ class _Kubernetes:
                 ):
                     # `unit` has not allowed the next unit to refresh
                     allow_next_unit_to_refresh = False
+                    reason = f"unit {unit.number} has not allowed the next unit to refresh"
                     if handle_action and action:
                         action.fail(f"Unit {unit.number} is unhealthy. Refresh will not resume.")
                     break
@@ -1312,6 +1477,15 @@ class _Kubernetes:
                     or (self._pause_after is _PauseAfter.FIRST and next_unit_to_refresh_index >= 2)
                 ):
                     allow_next_unit_to_refresh = True
+                    if action:
+                        assert action.check_health_of_refreshed_units
+                        reason = "resume-refresh action ran"
+                    else:
+                        reason = (
+                            f"pause_after_unit_refresh config is {repr(self._pause_after.value)}"
+                        )
+                        if self._pause_after is _PauseAfter.FIRST:
+                            reason += " and second unit already refreshed"
                     if handle_action and action:
                         assert self._pause_after is not _PauseAfter.NONE
                         if self._pause_after is _PauseAfter.FIRST:
@@ -1332,6 +1506,10 @@ class _Kubernetes:
                 else:
                     # User must run resume-refresh action to refresh `next_unit_to_refresh`
                     allow_next_unit_to_refresh = False
+                    reason = (
+                        "waiting for user to run resume-refresh action "
+                        f"(pause_after_unit_refresh_config is {repr(self._pause_after.value)})"
+                    )
 
         if allow_next_unit_to_refresh:
             target_partition = next_unit_to_refresh.number
@@ -1352,7 +1530,7 @@ class _Kubernetes:
         if target_partition < partition:
             self._set_partition(target_partition)
             partition = target_partition
-            message = f"Set StatefulSet partition to {target_partition}"
+            message = f"Set StatefulSet partition to {target_partition} because {reason}"
             if units_tearing_down := [
                 unit for unit in self._units if unit not in self._units_not_tearing_down
             ]:
@@ -1391,22 +1569,7 @@ class _Kubernetes:
             and charm.event.departing_unit == charm.unit
         ):
             # This unit is tearing down and 1+ other units are not tearing down
-            # TODO log—think about logging so that not confused on scale up when new unit has same name
-            # if not tearing_down.exists():
-            #     logger.info("Unit tearing down")
             tearing_down.touch()
-
-        # Check if this unit is tearing down
-        if tearing_down.exists():
-            # TODO improve docstring with exceptions that can be raised
-            # TODO is this k8s only?
-            if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
-                "pre-refresh-check",
-                "force-refresh-start",
-                "resume-refresh",
-            ):
-                charm.event.fail("Unit tearing down")
-            raise UnitTearingDown
 
         # Check if Juju app was deployed with `--trust` (needed to patch StatefulSet partition)
         if not (
@@ -1461,6 +1624,27 @@ class _Kubernetes:
             unit for unit in self._units if unit == charm.unit
         ).controller_revision
         """This unit's controller revision"""
+
+        # Check if this unit is tearing down
+        if tearing_down.exists():
+            # TODO improve docstring with exceptions that can be raised
+            # TODO is this k8s only?
+            if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
+                "pre-refresh-check",
+                "force-refresh-start",
+                "resume-refresh",
+            ):
+                charm.event.fail("Unit tearing down")
+
+            tearing_down_logged = _LOCAL_STATE / "kubernetes_unit_tearing_down_logged"
+            if not tearing_down_logged.exists():
+                logger.info(
+                    "Unit tearing down (pod uid "
+                    f"{next(unit for unit in self._units if unit == charm.unit).pod_uid})"
+                )
+                tearing_down_logged.touch()
+
+            raise UnitTearingDown
 
         # Determine `self._in_progress`
         for unit in self._units:
@@ -1595,8 +1779,7 @@ class _Kubernetes:
                         hashes2.append(hash_)
 
         # Get installed charm revision
-        dot_juju_charm = pathlib.Path(".juju-charm")
-        self._installed_charm_revision_raw = dot_juju_charm.read_text().strip()
+        self._installed_charm_revision_raw = _RawCharmRevision.from_file()
         """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
 
         # Get versions from refresh_versions.toml
@@ -1752,7 +1935,6 @@ class _Kubernetes:
                 )
 
                 if self._installed_workload_container_version:
-                    # TODO log: info/warning on else?
                     # Save versions in app databag for next refresh
                     matches_pin = (
                         self._installed_workload_container_version
@@ -1766,6 +1948,12 @@ class _Kubernetes:
                         charm_revision_raw=self._installed_charm_revision_raw,
                     )
                     self._original_versions.write_to_app_databag(self._relation.my_app)
+                else:
+                    logger.info(
+                        "This unit's workload container digest is not available from the "
+                        "Kubernetes API. Unable to save versions to app databag (for next "
+                        "refresh). Will retry next Juju event"
+                    )
 
         # pre-refresh-check action
         if isinstance(charm.event, charm.ActionEvent) and charm.event.action == "pre-refresh-check":
@@ -1788,12 +1976,13 @@ class _Kubernetes:
                             "After the refresh has started, use this command to rollback (copy "
                             "this down in case you need it later):\n"
                             f"`juju refresh {charm.app} --revision "
-                            f'{self._original_versions.charm_revision_raw.split("-")[-1]} '
+                            f"{self._original_versions.charm_revision_raw.charmhub_revision} "
                             f"--resource {self._charm_specific.oci_resource_name}="
                             f"{self._installed_workload_image_name}@"
                             f"{self._original_versions.workload_container}`"
                         )
                     }
+                    logger.info("Pre-refresh check succeeded")
             else:
                 charm.event.fail(
                     f"Must run action on leader unit. (e.g. `juju run {charm.app}/leader "

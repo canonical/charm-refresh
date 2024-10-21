@@ -1948,7 +1948,7 @@ class _Kubernetes:
                         "refresh). Will retry next Juju event"
                     )
 
-        if self._in_progress or charm.is_leader:
+        if self._in_progress or (charm.is_leader and self._installed_workload_container_version):
             original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
             self._rollback_command = (
                 f"juju refresh {charm.app} --revision "
@@ -1965,8 +1965,18 @@ class _Kubernetes:
             if self._in_progress:
                 charm.event.fail("Refresh already in progress")
             elif charm.is_leader:
-                assert self._rollback_command
                 try:
+                    # Check if we can get this unit's workload container digest from the Kubernetes
+                    # API. If we can't, we should fail the pre-refresh-check action since, later,
+                    # we won't be able to detect (or provide instructions for) rollback if we don't
+                    # know what workload container digest we refreshed from.
+                    if self._installed_workload_container_version:
+                        assert self._rollback_command
+                    else:
+                        raise PrecheckFailed(
+                            f"{self._charm_specific.workload_name} container is not running"
+                        )
+
                     self._charm_specific.run_pre_refresh_checks_before_any_units_refreshed()
                 except PrecheckFailed as exception:
                     charm.event.fail(

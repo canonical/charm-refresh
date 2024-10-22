@@ -1666,7 +1666,7 @@ class _Kubernetes:
         else:
             self._in_progress = False
 
-        # Raise StatefulSet partition
+        # Raise StatefulSet partition during stop event
         if (
             isinstance(charm.event, charm.StopEvent)
             # `self._in_progress` will be `True` even when the first unit to refresh is stopping
@@ -1689,6 +1689,33 @@ class _Kubernetes:
         self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
         if not self._relation:
             raise PeerRelationMissing
+
+        # Raise StatefulSet partition after pod restart
+        # Raise partition in case of rollback from charm code that was raising uncaught exception.
+        # If the charm code was raising an uncaught exception, Juju may have skipped the stop event
+        # when that unit's pod was deleted for rollback.
+        # This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2068500
+        had_opportunity_to_raise_partition_after_pod_restart = (
+            _LOCAL_STATE / "kubernetes_had_opportunity_to_raise_partition_after_pod_restart"
+        )
+        if not had_opportunity_to_raise_partition_after_pod_restart.exists() and self._in_progress:
+            # If `tearing_down.exists()`, this unit is being removed for scale down and we should
+            # not raise the partition—so that the partition never exceeds the highest unit number
+            # (which would cause `juju refresh` to not trigger any Juju events).
+            assert not tearing_down.exists()
+            # This unit could have been refreshing or just restarting.
+            # Raise StatefulSet partition to prevent other units from refreshing.
+            # If the unit was just restarting, the leader unit will lower the partition.
+            if self._get_partition() < charm.unit.number:
+                # Raise partition
+                self._set_partition(charm.unit.number)
+                logger.info(f"Set StatefulSet partition to {charm.unit.number} after pod restart")
+
+                # Trigger Juju event on leader unit to lower partition if needed
+                self._relation.my_unit["_unused_pod_uid_after_pod_restart_and_partition_raised"] = (
+                    next(unit for unit in self._units if unit == charm.unit).pod_uid
+                )
+        had_opportunity_to_raise_partition_after_pod_restart.touch()
 
         # Outdated units are not able to access the current config values
         # This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2084886

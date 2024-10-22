@@ -1079,6 +1079,10 @@ class _Kubernetes:
                     f"Unit {charm.unit.number} has not yet refreshed to latest app revision"
                 )  # TODO UX
             return
+        # If `self._unit_controller_revision == self._app_controller_revision` and
+        # `len(self._units) == 1`, `self._in_progress` should be `False`
+        assert len(self._units) > 1
+
         original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
         if not self._refresh_started:
             # Check if this unit is rolling back
@@ -1537,7 +1541,16 @@ class _Kubernetes:
                     f'{", ".join(str(unit.number) for unit in units_tearing_down)}'
                 )
             logger.info(message)
-        if self._pause_after is _PauseAfter.ALL or (
+        if partition == self._units[-1].number:
+            # Last unit is able to refresh
+            # At this point, a rollback is probably only possible if Kubernetes decides to not
+            # refresh the last unit even though the partition allows it to refresh. The
+            # pause_after_unit_refresh config option cannot be used to halt the refresh since the
+            # partition is already set to the lowest unit.
+            self._app_status_higher_priority = charm.MaintenanceStatus(
+                "Refreshing. To rollback, see docs or `juju debug-log`"
+            )
+        elif self._pause_after is _PauseAfter.ALL or (
             self._pause_after is _PauseAfter.FIRST
             # Whether only the first unit (that is not tearing down) is allowed to refresh
             and partition >= self._units_not_tearing_down[0].number
@@ -1567,6 +1580,7 @@ class _Kubernetes:
             and charm.event.departing_unit == charm.unit
         ):
             # This unit is tearing down and 1+ other units are not tearing down
+            # TODO comment: is this true when scaling to 0 units? do we care for this case?
             tearing_down.touch()
 
         # Check if Juju app was deployed with `--trust` (needed to patch StatefulSet partition)

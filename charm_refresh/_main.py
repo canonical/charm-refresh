@@ -770,7 +770,7 @@ class _OriginalVersions:
 
 
 class _KubernetesUnit(charm.Unit):
-    def __new__(cls, name: str, *, controller_revision: str, pod_uid: str):
+    def __new__(cls, name: str, /, *, controller_revision: str, pod_uid: str):
         instance: _KubernetesUnit = super().__new__(cls, name)
         instance.controller_revision = controller_revision
         instance.pod_uid = pod_uid
@@ -1005,7 +1005,7 @@ class _Kubernetes:
 
         class _ForceRefreshStartAction(charm.ActionEvent):
             def __init__(
-                self, event: charm.Event, *, first_unit_to_refresh: charm.Unit, in_progress: bool
+                self, event: charm.Event, /, *, first_unit_to_refresh: charm.Unit, in_progress: bool
             ):
                 if not isinstance(event, charm.ActionEvent):
                     raise _InvalidForceEvent

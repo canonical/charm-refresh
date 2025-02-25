@@ -788,7 +788,7 @@ class _KubernetesUnit(charm.Unit):
         pod_name = pod.metadata.name
         *app_name, unit_number = pod_name.split("-")
         # Example: "postgresql-k8s/0"
-        unit_name = f'{"-".join(app_name)}/{unit_number}'
+        unit_name = f"{'-'.join(app_name)}/{unit_number}"
         return cls(
             unit_name,
             controller_revision=pod.metadata.labels["controller-revision-hash"],
@@ -910,7 +910,7 @@ class _Kubernetes:
             if self._installed_workload_container_version:
                 message += (
                     "; Unexpected container "
-                    f'{self._installed_workload_container_version.removeprefix("sha256:")[:6]}'
+                    f"{self._installed_workload_container_version.removeprefix('sha256:')[:6]}"
                 )
             else:
                 # This message is unlikely to be displayed—the status will probably be overridden
@@ -1176,7 +1176,7 @@ class _Kubernetes:
                 false_values.append("run-pre-refresh-checks")
             from_to_message += (
                 ". force-refresh-start action ran with "
-                f'{" ".join(f"{key}=false" for key in false_values)}'
+                f"{' '.join(f'{key}=false' for key in false_values)}"
             )
         logger.info(
             f"Attempting to start refresh (for StatefulSet controller revision "
@@ -1340,7 +1340,7 @@ class _Kubernetes:
                 force_start.log("Pre-refresh checks successful")
         # All checks that ran succeeded
         logger.info(
-            f'Automatic checks succeeded{" or skipped" if force_start else ""}. Refresh started '
+            f"Automatic checks succeeded{' or skipped' if force_start else ''}. Refresh started "
             f"for StatefulSet controller revision {self._unit_controller_revision}. Starting "
             f"{self._charm_specific.workload_name} on this unit. Refresh is {from_to_message}"
         )
@@ -1411,8 +1411,7 @@ class _Kubernetes:
             and action.check_health_of_refreshed_units
         ):
             action.fail(
-                "`pause_after_unit_refresh` config is set to `none`. This action is not "
-                "applicable."
+                "`pause_after_unit_refresh` config is set to `none`. This action is not applicable."
             )
             # Do not log any additional information to action output
             action = None
@@ -1538,7 +1537,7 @@ class _Kubernetes:
             ]:
                 message += (
                     ". Computed by excluding units that are tearing down: "
-                    f'{", ".join(str(unit.number) for unit in units_tearing_down)}'
+                    f"{', '.join(str(unit.number) for unit in units_tearing_down)}"
                 )
             logger.info(message)
         if partition == self._units[-1].number:

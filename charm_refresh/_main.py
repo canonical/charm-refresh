@@ -1176,7 +1176,7 @@ class _Kubernetes:
                 false_values.append("run-pre-refresh-checks")
             from_to_message += (
                 ". force-refresh-start action ran with "
-                f'{" ".join(f"{value}=false" for value in false_values)}'
+                f'{" ".join(f"{key}=false" for key in false_values)}'
             )
         logger.info(
             f"Attempting to start refresh (for StatefulSet controller revision "

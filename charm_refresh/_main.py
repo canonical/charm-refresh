@@ -859,11 +859,11 @@ class _Kubernetes:
                 )
             ):
                 return True
-        if self._unit_controller_revision in self._relation.my_app.get(
+        if self._unit_controller_revision in self._relation.my_app_ro.get(
             "refresh_started_if_app_controller_revision_hash_in", tuple()
         ):
             return True
-        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
+        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
         if (
             original_versions.charm == self._installed_charm_version
             and original_versions.workload_container == self._installed_workload_container_version
@@ -1052,7 +1052,7 @@ class _Kubernetes:
                 "refresh_started_if_app_controller_revision_hash_in", tuple()
             )
             for unit in self._units
-        ) or self._app_controller_revision in self._relation.my_app.get(
+        ) or self._app_controller_revision in self._relation.my_app_ro.get(
             "refresh_started_if_app_controller_revision_hash_in", tuple()
         )
         """Whether this app has started to refresh to `self._app_controller_revision`
@@ -1083,7 +1083,7 @@ class _Kubernetes:
         # `len(self._units) == 1`, `self._in_progress` should be `False`
         assert len(self._units) > 1
 
-        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
+        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
         if not self._refresh_started:
             # Check if this unit is rolling back
             if (
@@ -1804,8 +1804,8 @@ class _Kubernetes:
         # databag. Preserves data if app is scaled down (prevents workload container check,
         # compatibility checks, and pre-refresh checks from running again on scale down).
         # Whether this unit is leader
-        if isinstance(self._relation.my_app, collections.abc.MutableMapping):
-            hashes2: typing.MutableSequence[str] = self._relation.my_app.setdefault(
+        if self._relation.my_app_rw is not None:
+            hashes2: typing.MutableSequence[str] = self._relation.my_app_rw.setdefault(
                 "refresh_started_if_app_controller_revision_hash_in", tuple()
             )
             for unit in self._units:
@@ -1967,9 +1967,9 @@ class _Kubernetes:
             self._pod_uids_of_units_that_are_tearing_down_local_state.unlink(missing_ok=True)
 
             # Whether this unit is leader
-            if isinstance(self._relation.my_app, collections.abc.MutableMapping):
+            if self._relation.my_app_rw is not None:
                 # Clean up state that is no longer in use
-                self._relation.my_app.pop(
+                self._relation.my_app_rw.pop(
                     "refresh_started_if_app_controller_revision_hash_in", None
                 )
 
@@ -1986,7 +1986,7 @@ class _Kubernetes:
                         charm=self._installed_charm_version,
                         charm_revision_raw=self._installed_charm_revision_raw,
                     )
-                    self._original_versions.write_to_app_databag(self._relation.my_app)
+                    self._original_versions.write_to_app_databag(self._relation.my_app_rw)
                 else:
                     logger.info(
                         "This unit's workload container digest is not available from the "
@@ -1995,7 +1995,7 @@ class _Kubernetes:
                     )
 
         if self._in_progress or (charm.is_leader and self._installed_workload_container_version):
-            original_versions = _OriginalVersions.from_app_databag(self._relation.my_app)
+            original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
             self._rollback_command = (
                 f"juju refresh {charm.app} --revision "
                 f"{original_versions.charm_revision_raw.charmhub_revision} --resource "

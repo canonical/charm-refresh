@@ -1014,6 +1014,7 @@ class _Kubernetes:
                     raise _InvalidForceEvent
                 if charm.unit != first_unit_to_refresh:
                     event.fail(f"Must run action on unit {first_unit_to_refresh.number}")
+                    raise _InvalidForceEvent
                 if not in_progress:
                     event.fail("No refresh in progress")
                     raise _InvalidForceEvent

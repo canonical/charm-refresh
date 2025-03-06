@@ -3,7 +3,7 @@ from ._main import (
     CharmVersion,
     Cloud,
     KubernetesJujuAppNotTrusted,
-    PeerRelationMissing,
+    PeerRelationNotReady,
     PrecheckFailed,
     Refresh,
     UnitTearingDown,

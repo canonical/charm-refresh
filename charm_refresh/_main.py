@@ -5,11 +5,15 @@ import enum
 import functools
 import json
 import logging
+import os
 import pathlib
+import platform
+import subprocess
 import typing
 
 import charm_ as charm
 import charm_json
+import httpx
 import lightkube
 import lightkube.models.authorization_v1
 import lightkube.resources.apps_v1
@@ -40,6 +44,7 @@ class CharmVersion:
     Stored as a git tag on charm repositories
 
     TODO: link to docs about versioning spec
+    TODO: add v prefix?
     """
 
     def __init__(self, version: str, /):
@@ -433,7 +438,11 @@ class CharmSpecific(abc.ABC):
         return True
 
 
-class PeerRelationMissing(Exception):
+class PeerRelationNotReady(Exception):
+    """Refresh peer relation is not yet available or not all units have joined yet"""
+
+
+class _PeerRelationMissing(PeerRelationNotReady):
     """Refresh peer relation is not yet available"""
 
 
@@ -505,7 +514,7 @@ class Refresh:
     def next_unit_allowed_to_refresh(self, value: typing.Literal[True]):
         self._refresh.next_unit_allowed_to_refresh = value
 
-    def update_snap_revision(self):
+    def update_snap_revision(self) -> None:
         """Must be called immediately after the workload snap is refreshed
 
         Only applicable if cloud is `Cloud.MACHINES`
@@ -516,7 +525,11 @@ class Refresh:
 
         Resets `next_unit_allowed_to_refresh` to `False`.
         """
-        raise NotImplementedError
+        if not isinstance(self._refresh, _Machines):
+            raise ValueError(
+                "`update_snap_revision` can only be called if cloud is `Cloud.MACHINES`"
+            )
+        self._refresh.update_snap_revision()
 
     @property
     def pinned_snap_revision(self) -> str:
@@ -529,7 +542,11 @@ class Refresh:
         During a refresh, the snap revision should be read from the `refresh_snap` method's
         `snap_revision` parameter.
         """
-        raise NotImplementedError
+        if not isinstance(self._refresh, _Machines):
+            raise ValueError(
+                "`pinned_snap_revision` can only be accessed if cloud is `Cloud.MACHINES`"
+            )
+        return self._refresh.pinned_snap_revision
 
     @property
     def workload_allowed_to_start(self) -> bool:
@@ -573,6 +590,8 @@ class Refresh:
         If the user skips the automatic checks by running the `force-refresh-start` action, the
         value of this attribute will be `True`.
         """
+        if not isinstance(self._refresh, _Kubernetes):
+            return True
         return self._refresh.workload_allowed_to_start
 
     @property
@@ -615,7 +634,7 @@ class Refresh:
         if charm_specific.cloud is Cloud.KUBERNETES:
             self._refresh = _Kubernetes(charm_specific)
         elif charm_specific.cloud is Cloud.MACHINES:
-            raise NotImplementedError
+            self._refresh = _Machines(charm_specific, refresh=self)
         else:
             raise TypeError
 
@@ -654,26 +673,45 @@ class _PauseAfter(str, enum.Enum):
         return priorities[self] > priorities[other]
 
 
-@dataclasses.dataclass(frozen=True)
 class _RefreshVersions:
+    # TODO repr?
     """Versions pinned in this unit's refresh_versions.toml"""
 
-    # TODO add note on machines that workload versions pinned are not necc installed
-    # TODO add machines subclass with snap
-    charm: CharmVersion
-    workload: str
-
-    @classmethod
-    def from_file(cls):
+    def __init__(self):
         with pathlib.Path("refresh_versions.toml").open("rb") as file:
-            versions = tomli.load(file)
+            self._versions = tomli.load(file)
         try:
-            return cls(charm=CharmVersion(versions["charm"]), workload=versions["workload"])
+            self.charm = CharmVersion(self._versions["charm"])
+            self.workload: str = self._versions["workload"]
         except KeyError:
             # TODO link to docs with format?
             raise KeyError("Required key missing from refresh_versions.toml")
         except ValueError:
             raise ValueError("Invalid charm version in refresh_versions.toml")
+
+
+class _MachinesRefreshVersions(_RefreshVersions):
+    """Versions pinned in this (machines) unit's refresh_versions.toml"""
+
+    # TODO edit docstring?
+    # TODO add note on machines that workload versions pinned are not necc installed
+
+    def __init__(self):
+        super().__init__()
+        try:
+            self.snap_name: str = self._versions["snap"]["name"]
+            snap_revisions = self._versions["snap"]["revisions"]
+        except KeyError:
+            # TODO link to docs with format?
+            raise KeyError("Required key missing from refresh_versions.toml")
+        try:
+            self.snap_revision: str = snap_revisions[platform.machine()]
+        except KeyError:
+            # TODO link to docs with format?
+            raise KeyError(f"Snap revision missing for architecture {repr(platform.machine())}")
+
+
+_dot_juju_charm = pathlib.Path(".juju-charm")
 
 
 class _RawCharmRevision(str):
@@ -682,12 +720,17 @@ class _RawCharmRevision(str):
     @classmethod
     def from_file(cls):
         """Charm revision in this unit's .juju-charm file"""
-        return cls(pathlib.Path(".juju-charm").read_text().strip())
+        return cls(_dot_juju_charm.read_text().strip())
 
     @property
     def charmhub_revision(self) -> typing.Optional[str]:
         if self.startswith("ch:"):
             return self.split("-")[-1]
+
+
+def _dot_juju_charm_modified_time():
+    """Modified time of .juju-charm file (e.g. 1727768259.4063382)"""
+    return _dot_juju_charm.stat().st_mtime
 
 
 @dataclasses.dataclass(frozen=True)
@@ -998,7 +1041,7 @@ class _Kubernetes:
         Sets `self._unit_status_higher_priority` & unit status. Unit status only set if
         `self._unit_status_higher_priority` (unit status is not cleared if
         `self._unit_status_higher_priority` is `None`—that is the responsibility of the charm)
-        """
+        """  # TODO actually set unit status
 
         class _InvalidForceEvent(ValueError):
             """Event is not valid force-refresh-start action event"""
@@ -1039,7 +1082,7 @@ class _Kubernetes:
         force_start: typing.Optional[_ForceRefreshStartAction]
         try:
             force_start = _ForceRefreshStartAction(
-                charm.event, first_unit_to_refresh=self._units[0], in_progress=self.in_progress
+                charm.event, first_unit_to_refresh=self._units[0], in_progress=self._in_progress
             )
         except _InvalidForceEvent:
             force_start = None
@@ -1072,7 +1115,7 @@ class _Kubernetes:
         `False` unless the `juju refresh` is a rollback
         """
 
-        if not charm.unit == self._units[0]:
+        if charm.unit != self._units[0]:
             return
         if self._unit_controller_revision != self._app_controller_revision:
             if force_start:
@@ -1642,7 +1685,6 @@ class _Kubernetes:
         # Check if this unit is tearing down
         if tearing_down.exists():
             # TODO improve docstring with exceptions that can be raised
-            # TODO is this k8s only?
             if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
                 "pre-refresh-check",
                 "force-refresh-start",
@@ -1690,7 +1732,7 @@ class _Kubernetes:
 
         self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
         if not self._relation:
-            raise PeerRelationMissing
+            raise _PeerRelationMissing
 
         # Raise StatefulSet partition after pod restart
         # Raise partition in case of rollback from charm code that was raising uncaught exception.
@@ -1803,7 +1845,7 @@ class _Kubernetes:
                 hashes1.append(self._unit_controller_revision)
 
         # Propagate "refresh_started_if_app_controller_revision_hash_in" in unit databags to app
-        # databag. Preserves data if app is scaled down (prevents workload container check,
+        # databag. Preserves data if this app is scaled down (prevents workload container check,
         # compatibility checks, and pre-refresh checks from running again on scale down).
         # Whether this unit is leader
         if self._relation.my_app_rw is not None:
@@ -1824,7 +1866,7 @@ class _Kubernetes:
         """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
 
         # Get versions from refresh_versions.toml
-        refresh_versions = _RefreshVersions.from_file()
+        refresh_versions = _RefreshVersions()
         self._installed_charm_version = refresh_versions.charm
         """This unit's charm version"""
         self._pinned_workload_version = refresh_versions.workload
@@ -2051,3 +2093,1238 @@ class _Kubernetes:
         self._start_refresh()
 
         self._set_partition_and_app_status(handle_action=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class _HistoryEntry:
+    """Charm code refresh that, at the time of refresh, was to the up-to-date charm code version
+
+    The first charm code version on initial installation or on a new unit that is added during
+    scale up counts as a "refresh"
+
+    If a unit is raising an uncaught exception, it may get refreshed to a charm code version that
+    is not up-to-date. That refresh should not be stored as a `_HistoryEntry`
+    """
+
+    charm_revision: _RawCharmRevision
+    """Charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+    time_of_refresh: float
+    """Modified time of .juju-charm file (e.g. 1727768259.4063382)"""
+
+
+@dataclasses.dataclass
+class _CharmCodeRefreshHistory:
+    """History of this unit's charm code refreshes"""
+
+    last_refresh_to_up_to_date_charm_code_version: _HistoryEntry
+    """Last refresh that, at the time of refresh, was to the up-to-date charm code version"""
+
+    second_to_last_refresh_to_up_to_date_charm_code_version: typing.Optional[_HistoryEntry]
+    """Second to last refresh that, at the time of refresh, was to the up-to-date charm code version"""
+
+    _PATH = _LOCAL_STATE / "machines_last_two_refreshes_to_up_to_date_charm_code_version.json"
+
+    @classmethod
+    def from_file(cls):
+        try:
+            data: typing.Dict[str, typing.Optional[dict]] = json.loads(cls._PATH.read_text())
+        except FileNotFoundError:
+            # This is initial installation or this is a new unit that was added during scale up
+            history = cls(
+                last_refresh_to_up_to_date_charm_code_version=_HistoryEntry(
+                    charm_revision=_RawCharmRevision.from_file(),
+                    time_of_refresh=_dot_juju_charm_modified_time(),
+                ),
+                second_to_last_refresh_to_up_to_date_charm_code_version=None,
+            )
+            history.save_to_file()
+            return history
+        data2 = {}
+        for key, value in data.items():
+            if value is not None:
+                value = _HistoryEntry(**value)
+            data2[key] = value
+        return cls(**data2)
+
+    def save_to_file(self):
+        self._PATH.write_text(json.dumps(dataclasses.asdict(self), indent=4))
+
+
+class _MachinesInProgress(enum.Enum):
+    # TODO docstring; uses snap
+    FALSE = 0
+    TRUE = 1
+    UNKNOWN = 2
+
+    def __bool__(self):
+        raise TypeError
+
+
+class _MachinesDatabagUpToDate(enum.Enum):
+    """Whether a unit's databag is up-to-date"""
+
+    FALSE = 0
+    TRUE = 1
+    UNKNOWN = 2
+
+    def __bool__(self):
+        raise TypeError
+
+
+class _Machines:
+    @property
+    def in_progress(self) -> bool:
+        if self._refresh_completed_this_event and len(self._relation.all_units) > 1:
+            # TODO comment: shouldn't run non-refresh stuff on this event in case uncaught exception causes databag state (that tells other units refresh completed) to not get propgated to databag. wait till next event where databag changes committed. note about how other units will trigger event on this unit
+            # TODO: single unit case?
+            return True
+        if (
+            self._in_progress is _MachinesInProgress.TRUE
+            or self._in_progress is _MachinesInProgress.UNKNOWN
+        ):
+            return True
+        elif self._in_progress is _MachinesInProgress.FALSE:
+            return False
+        else:
+            raise TypeError
+
+    @property
+    def next_unit_allowed_to_refresh(self) -> bool:
+        return (
+            self._relation.my_unit.get(
+                "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date"
+            )
+            is True
+        )
+
+    @next_unit_allowed_to_refresh.setter
+    def next_unit_allowed_to_refresh(self, value: typing.Literal[True]):
+        if value is not True:
+            raise ValueError("`next_unit_allowed_to_refresh` can only be set to `True`")
+        if (
+            self._relation.my_unit.get("installed_snap_revision")
+            != self._get_installed_snap_revision()
+        ):
+            raise Exception(
+                "Must call `update_snap_revision()` before setting "
+                "`next_unit_allowed_to_refresh = True`"
+            )
+        # TODO log when set
+        self._relation.my_unit[
+            "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date"
+        ] = True
+
+    def update_snap_revision(self):
+        self._update_snap_revision(raise_if_not_installed=True)
+
+    @property
+    def pinned_snap_revision(self) -> str:
+        return self._pinned_workload_container_version
+
+    @property
+    def app_status_higher_priority(self) -> typing.Optional[charm.Status]:
+        return self._app_status_higher_priority
+
+    @property
+    def unit_status_higher_priority(self) -> typing.Optional[charm.Status]:
+        return self._unit_status_higher_priority
+
+    def unit_status_lower_priority(
+        self, *, workload_is_running: bool
+    ) -> typing.Optional[charm.Status]:
+        if self._in_progress is _MachinesInProgress.FALSE:
+            return
+        message = (
+            f"{self._charm_specific.workload_name} {self._installed_workload_version.read_text()}"
+        )
+        if workload_is_running:
+            message += " running"
+        message += f"; Snap revision {self._get_installed_snap_revision()}"
+        if self._get_installed_snap_revision() != self._pinned_workload_container_version:
+            message += " (outdated)"
+        if self._installed_charm_revision_raw.charmhub_revision:
+            # Charm was deployed from Charmhub; use revision
+            message += f"; Charm revision {self._installed_charm_revision_raw.charmhub_revision}"
+        else:
+            # Charmhub revision is not available; fall back to charm version
+            message += f"; Charm version {self._installed_charm_version}"
+        if workload_is_running:
+            return charm.ActiveStatus(message)
+        return charm.WaitingStatus(message)
+
+    def _get_installed_snap_revision(self) -> typing.Optional[str]:
+        # TODO docs: snap name cannot change on refresh
+        # https://snapcraft.io/docs/using-the-api
+        client = httpx.Client(transport=httpx.HTTPTransport(uds="/run/snapd.socket"))
+        # https://snapcraft.io/docs/snapd-rest-api#heading--snaps
+        response = client.get(
+            "http://localhost/v2/snaps", params={"snaps": self._workload_snap_name}
+        ).raise_for_status()
+        data = response.json()
+        assert data["type"] == "sync"
+        snaps = data["result"]
+        if not snaps:
+            # Snap not installed
+            return
+        assert len(snaps) == 1
+        revision = snaps[0]["revision"]
+        assert isinstance(revision, str)
+        return revision
+
+    def _update_snap_revision(self, *, raise_if_not_installed: bool):
+        snap_revision = self._get_installed_snap_revision()
+        if snap_revision is None and raise_if_not_installed:
+            # TODO improve message? snap name
+            raise ValueError("`update_snap_revision()` called but workload snap is not installed")
+        if snap_revision != self._relation.my_unit.get("installed_snap_revision"):
+            self._relation.my_unit[
+                "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date"
+            ] = False
+            # TODO: logs?
+            if snap_revision:
+                self._relation.my_unit["installed_snap_revision"] = snap_revision
+                self._installed_workload_version.write_text(self._pinned_workload_version)
+            else:
+                del self._relation.my_unit["installed_snap_revision"]
+                self._installed_workload_version.unlink(missing_ok=True)
+
+    def _is_units_databag_up_to_date_unknown(self, unit: charm.Unit, /) -> _MachinesDatabagUpToDate:
+        """Check if a unit's databag is up-to-date
+
+        If `self._history.second_to_last_refresh_to_up_to_date_charm_code_version is None`, this
+        method may return `_MachinesDatabagUpToDate.UNKNOWN`.
+        Otherwise, this method will only return `_MachinesDatabagUpToDate.TRUE` or
+        `_MachinesDatabagUpToDate.FALSE`
+
+        This method assumes that "last_refresh_to_up_to_date_charm_code_version" is set in the
+        databag
+        """
+        if unit == charm.unit:
+            return _MachinesDatabagUpToDate.TRUE
+        other_unit_last_refresh = _HistoryEntry(
+            **self._relation[unit]["last_refresh_to_up_to_date_charm_code_version"]
+        )
+        if other_unit_last_refresh.charm_revision != self._installed_charm_revision_raw:
+            return _MachinesDatabagUpToDate.FALSE
+        if self._history.second_to_last_refresh_to_up_to_date_charm_code_version is None:
+            # It is not possible to determine if the databag is up-to-date
+            # (This is initial installation or this unit is a new unit that was added during scale
+            # up)
+            return _MachinesDatabagUpToDate.UNKNOWN
+        if (
+            self._history.second_to_last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            < other_unit_last_refresh.time_of_refresh
+        ):
+            return _MachinesDatabagUpToDate.TRUE
+        elif (
+            self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            != _dot_juju_charm_modified_time()
+        ):
+            # TODO comment This unit's charm code might not be latest
+            # TODO check if adding this check causes issues
+            # TODO remove redundant check for this elsewhere?
+            return _MachinesDatabagUpToDate.UNKNOWN
+        else:
+            return _MachinesDatabagUpToDate.FALSE
+
+    def _is_units_databag_up_to_date(self, unit: charm.Unit, /) -> bool:
+        """Check if a unit's databag is up-to-date
+
+        If `self._history.second_to_last_refresh_to_up_to_date_charm_code_version is None` and the
+        charm code version in the databag equals this unit's charm code version, it is not possible
+        to determine if the databag is up-to-date—but this method will assume it is and return
+        `True`
+
+        This method assumes that "last_refresh_to_up_to_date_charm_code_version" is set in the
+        databag
+        """
+        result = self._is_units_databag_up_to_date_unknown(unit)
+        if result is _MachinesDatabagUpToDate.TRUE:
+            return True
+        elif result is _MachinesDatabagUpToDate.UNKNOWN:
+            # Assume the databag is up-to-date
+            return True
+        elif result is _MachinesDatabagUpToDate.FALSE:
+            return False
+        else:
+            raise TypeError
+
+    def _determine_in_progress(self) -> _MachinesInProgress:
+        """Determine whether a refresh is currently in progress
+
+        TODO snap only
+        TODO charm only refresh
+        TODO charm only refresh after snap refresh
+
+        TODO when unknown
+
+        TODO mention not same as what's reported by api on last unit to refresh?
+        TODO mention from this unit's perspective?
+        """
+        unknown = False
+        for unit, databag in self._relation.all_units.items():
+            installed_snap_revision = databag.get("installed_snap_revision")
+            if installed_snap_revision is None:
+                # This is initial installation or `unit` is a new unit that was added during scale
+                # up
+                # TODO: issues with this unit on remove event? check this unit separately?
+                continue
+            if installed_snap_revision != self._pinned_workload_container_version:
+                return _MachinesInProgress.TRUE
+            # Check if databag is up-to-date
+            # If "installed_snap_revision" is set, "last_refresh_to_up_to_date_charm_code_version"
+            # should also be set
+            assert databag.get("last_refresh_to_up_to_date_charm_code_version") is not None
+            if self._is_units_databag_up_to_date(unit):
+                continue
+            else:
+                unknown = True
+                continue
+
+        if unknown:
+            return _MachinesInProgress.UNKNOWN
+        else:
+            return _MachinesInProgress.FALSE
+
+    def _start_refresh(self):
+        class _InvalidForceEvent(ValueError):
+            """Event is not valid force-refresh-start action event"""
+
+        class _ForceRefreshStartAction(charm.ActionEvent):
+            def __init__(
+                self,
+                event: charm.Event,
+                /,
+                *,
+                first_unit_to_refresh: charm.Unit,
+                in_progress: _MachinesInProgress,
+            ):
+                if not isinstance(event, charm.ActionEvent):
+                    raise _InvalidForceEvent
+                super().__init__()
+                if event.action != "force-refresh-start":
+                    raise _InvalidForceEvent
+                if charm.unit != first_unit_to_refresh:
+                    event.fail(f"Must run action on unit {first_unit_to_refresh.number}")
+                    raise _InvalidForceEvent
+                if in_progress is not _MachinesInProgress.TRUE:
+                    if in_progress is _MachinesInProgress.FALSE:
+                        message = "No refresh in progress"
+                    elif in_progress is _MachinesInProgress.UNKNOWN:
+                        message = "Unable to determine if a refresh is in progress"  # TODO improve
+                    else:
+                        raise TypeError
+                    event.fail(message)
+                    raise _InvalidForceEvent
+                self.check_workload_container: bool = event.parameters["check-workload-container"]
+                self.check_compatibility: bool = event.parameters["check-compatibility"]
+                self.run_pre_refresh_checks: bool = event.parameters["run-pre-refresh-checks"]
+                for parameter in (
+                    self.check_workload_container,
+                    self.check_compatibility,
+                    self.run_pre_refresh_checks,
+                ):
+                    if parameter is False:
+                        break
+                else:
+                    event.fail(
+                        "Must run with at least one of `check-compatibility`, "
+                        "`run-pre-refresh-checks`, or `check-workload-container` parameters "
+                        "`=false`"
+                    )
+                    raise _InvalidForceEvent
+
+        # TODO docstring: `self._force_start` used to report status on snap refresh if force valid
+        self._force_start: typing.Optional[_ForceRefreshStartAction] = None
+        force_start: typing.Optional[_ForceRefreshStartAction]
+        try:
+            force_start = _ForceRefreshStartAction(
+                charm.event, first_unit_to_refresh=self._units[0], in_progress=self._in_progress
+            )
+        except _InvalidForceEvent:
+            force_start = None
+        self._unit_status_higher_priority: typing.Optional[charm.Status] = None
+        if self._in_progress is not _MachinesInProgress.TRUE:
+            return
+        if charm.unit != self._units[0]:
+            return
+        if (
+            self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            != _dot_juju_charm_modified_time()
+        ):
+            # This unit's charm code version is not up-to-date
+            if force_start:
+                force_start.fail("waiting for event")  # TODO UX
+            # TODO log?
+            return
+
+        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
+        if not self._refresh_started:
+            # Check if this unit is rolling back
+            if (
+                original_versions.charm == self._installed_charm_version
+                # TODO remove workload check? if charm is eq it should be fine
+                and original_versions.workload_container == self._pinned_workload_container_version
+            ):
+                # Rollback to original charm code & workload container version; skip checks
+
+                workload_version = (
+                    f"{self._charm_specific.workload_name} {self._pinned_workload_version} (snap "
+                    f"revision {self._pinned_workload_container_version})"
+                )
+                if self._installed_charm_revision_raw.charmhub_revision:
+                    charm_version = (
+                        f"revision {self._installed_charm_revision_raw.charmhub_revision} "
+                        f"({repr(self._installed_charm_version)})"
+                    )
+                else:
+                    charm_version = f"{repr(self._installed_charm_version)}"
+                logger.info(
+                    "Rollback detected. Automatic refresh checks skipped. Refresh started. "
+                    f"Rolling back to {workload_version} and charm {charm_version}"
+                )
+
+                self._refresh_started = True
+                self._relation.my_unit["refresh_started_if_this_units_databag_is_up_to_date"] = True
+                self._refresh_started_local_state.touch()
+        if self._refresh_started:
+            if force_start:
+                force_start.fail("refresh already started")  # TODO UX
+            return
+
+        # Run automatic checks
+
+        # Log workload & charm versions we're refreshing from & to
+        from_to_message = (
+            f"from {self._charm_specific.workload_name} {original_versions.workload} (snap"
+            f"revision {original_versions.workload_container}) and charm "
+        )
+        if original_versions.charm_revision_raw.charmhub_revision:
+            from_to_message += (
+                f"revision {original_versions.charm_revision_raw.charmhub_revision} "
+                f"({repr(original_versions.charm)}) "
+            )
+        else:
+            from_to_message += f"{repr(original_versions.charm)} "
+        from_to_message += (
+            f"to {self._charm_specific.workload_name} {self._pinned_workload_version} (snap "
+            f"revision {self._pinned_workload_container_version}) and charm "
+        )
+        if self._installed_charm_revision_raw.charmhub_revision:
+            from_to_message += (
+                f"revision {self._installed_charm_revision_raw.charmhub_revision} "
+                f"({repr(self._installed_charm_version)})"
+            )
+        else:
+            from_to_message += f"{repr(self._installed_charm_version)}"
+        if force_start:
+            false_values = []
+            if not force_start.check_workload_container:
+                false_values.append("check-workload-container")
+            if not force_start.check_compatibility:
+                false_values.append("check-compatibility")
+            if not force_start.run_pre_refresh_checks:
+                false_values.append("run-pre-refresh-checks")
+            from_to_message += (
+                ". force-refresh-start action ran with "
+                f"{' '.join(f'{key}=false' for key in false_values)}"
+            )
+        logger.info(f"Attempting to start refresh {from_to_message}")
+
+        if force_start and not force_start.check_workload_container:
+            force_start.log(
+                f"Skipping check that refresh is to {self._charm_specific.workload_name} "
+                "container version that has been validated to work with the charm revision"
+            )
+        else:
+            # Check workload container
+            # On machines, the user is not able to specify a snap revision that is different from
+            # the snap revision pinned in the charm code.
+            # In the future, if snap resources are added to Juju (similar to Kubernetes OCI
+            # resources), this will change.
+            if True:
+                if force_start:
+                    force_start.log(
+                        f"Checked that refresh is to {self._charm_specific.workload_name}"
+                        "container version that has been validated to work with the charm revision"
+                    )
+            else:
+                raise NotImplementedError
+        if force_start and not force_start.check_compatibility:
+            force_start.log(
+                "Skipping check for compatibility with previous "
+                f"{self._charm_specific.workload_name} version and charm revision"
+            )
+        else:
+            # Check compatibility
+            if self._charm_specific.is_compatible(
+                old_charm_version=original_versions.charm,
+                new_charm_version=self._installed_charm_version,
+                # `original_versions.workload` is not `None` since
+                # `original_versions.installed_workload_container_matched_pinned_container` is
+                # always `True` on machines
+                old_workload_version=original_versions.workload,
+                new_workload_version=self._pinned_workload_version,
+            ):
+                if force_start:
+                    force_start.log(
+                        f"Checked that refresh from previous {self._charm_specific.workload_name} "
+                        "version and charm revision to current versions is compatible"
+                    )
+            else:
+                # Log reason why compatibility check failed
+                logger.info(
+                    "Refresh incompatible because new version of "
+                    f"{self._charm_specific.workload_name} "
+                    f"({repr(self._pinned_workload_version)}) and/or charm "
+                    f"({repr(self._installed_charm_version)}) is not compatible with previous "
+                    f"version of {self._charm_specific.workload_name} "
+                    f"({repr(original_versions.workload)}) and/or charm "
+                    f"({repr(original_versions.charm)})"
+                )
+                # The leader unit will set app status to show that refresh is incompatible
+                if force_start:
+                    force_start.fail(f"Refresh incompatible. Rollback with `juju refresh`")
+                return
+        if force_start and not force_start.run_pre_refresh_checks:
+            force_start.log("Skipping pre-refresh checks")
+        else:
+            # Run pre-refresh checks
+            if force_start:
+                force_start.log("Running pre-refresh checks")
+            try:
+                self._charm_specific.run_pre_refresh_checks_before_any_units_refreshed()
+            except PrecheckFailed as exception:
+                self._unit_status_higher_priority = charm.BlockedStatus(
+                    f"Rollback with `juju refresh`. Pre-refresh check failed: {exception.message}"
+                )
+                charm.unit_status = self._unit_status_higher_priority
+                logger.error(
+                    f"Pre-refresh check failed: {exception.message}. Rollback with `juju refresh`. "
+                    "Continuing this refresh may cause data loss and/or downtime. The refresh can "
+                    "be forced to continue with the `force-refresh-start` action and the "
+                    f"`run-pre-refresh-checks` parameter. Run `juju show-action {charm.app} "
+                    "force-refresh-start` for more information"
+                )
+                if force_start:
+                    force_start.fail(
+                        f"Pre-refresh check failed: {exception.message}. Rollback with "
+                        "`juju refresh`"
+                    )
+                return
+            if force_start:
+                force_start.log("Pre-refresh checks successful")
+        # All checks that ran succeeded
+        logger.info(
+            # TODO fix message
+            f"Automatic checks succeeded{' or skipped' if force_start else ''}. Refresh started. "
+            f"Refreshing this unit. Refresh is {from_to_message}"
+        )
+        self._refresh_started = True
+        self._relation.my_unit["refresh_started_if_this_units_databag_is_up_to_date"] = True
+        self._refresh_started_local_state.touch()
+        # TODO comment force start result
+        self._force_start = force_start
+
+    def _set_app_status(self):
+        """Set `self._app_status_higher_priority` & app status
+
+        App status only set if `self._app_status_higher_priority` (app status is not cleared if
+        `self._app_status_higher_priority` is `None`—that is the responsibility of the charm)
+        """
+        self._app_status_higher_priority: typing.Optional[charm.Status] = None
+        if not charm.is_leader:
+            return
+
+        if self._pause_after is _PauseAfter.UNKNOWN:
+            self._app_status_higher_priority = charm.BlockedStatus(
+                'pause_after_unit_refresh config must be set to "all", "first", or "none"'
+            )
+            charm.app_status = self._app_status_higher_priority
+            return
+
+        if self._in_progress is _MachinesInProgress.FALSE:
+            return
+        if self._in_progress is _MachinesInProgress.UNKNOWN:
+            self._app_status_higher_priority = charm.MaintenanceStatus(
+                "Determining if a refresh is in progress"
+            )
+            charm.app_status = self._app_status_higher_priority
+            return
+        assert self._in_progress is _MachinesInProgress.TRUE
+        original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
+        if not self._charm_specific.is_compatible(
+            old_charm_version=original_versions.charm,
+            new_charm_version=self._installed_charm_version,
+            # `original_versions.workload` is not `None` since
+            # `original_versions.installed_workload_container_matched_pinned_container` is always
+            # `True` on machines
+            old_workload_version=original_versions.workload,
+            new_workload_version=self._pinned_workload_version,
+        ):
+            # Log reason why compatibility check failed
+            logger.info(
+                "Refresh incompatible because new version of "
+                f"{self._charm_specific.workload_name} ({repr(self._pinned_workload_version)}) "
+                f"and/or charm ({repr(self._installed_charm_version)}) is not compatible with "
+                f"previous version of {self._charm_specific.workload_name} "
+                f"({repr(original_versions.workload)}) and/or charm "
+                f"({repr(original_versions.charm)})"
+            )
+
+            self._app_status_higher_priority = charm.BlockedStatus(
+                "Refresh incompatible. Rollback with `juju refresh --revision "
+                f"{original_versions.charm_revision_raw.charmhub_revision}`"
+            )
+            charm.app_status = self._app_status_higher_priority
+            logger.info(
+                "Refresh incompatible. Rollback with `juju refresh`. Continuing this refresh may "
+                "cause data loss and/or downtime. The refresh can be forced to continue with the "
+                "`force-refresh-start` action and the `check-compatibility` parameter. Run `juju "
+                f"show-action {charm.app} force-refresh-start` for more information"
+            )
+            return
+
+        for index, unit in enumerate(self._units):
+            databag = self._relation[unit]
+            if databag.get("installed_snap_revision") != self._pinned_workload_container_version:
+                break
+            # If "installed_snap_revision" is set, "last_refresh_to_up_to_date_charm_code_version"
+            # should also be set
+            assert databag.get("last_refresh_to_up_to_date_charm_code_version") is not None
+            if not self._is_units_databag_up_to_date(unit):
+                break
+        else:
+            # This code should never run because `self._in_progress is _MachinesInProgress.TRUE`
+            assert False
+        next_unit_to_refresh = unit
+        next_unit_to_refresh_index = index
+
+        assert self._pause_after is not _PauseAfter.UNKNOWN
+        if self._pause_after is _PauseAfter.ALL or (
+            self._pause_after is _PauseAfter.FIRST and next_unit_to_refresh_index <= 1
+        ):
+            self._app_status_higher_priority = charm.BlockedStatus(
+                "Refreshing. Check units "
+                f">={self._units[max(next_unit_to_refresh_index - 1, 0)].number} are healthy & run"
+                f"`resume-refresh` on unit {next_unit_to_refresh.number}. To rollback, `juju "
+                f"refresh --revision {original_versions.charm_revision_raw.charmhub_revision}`"
+            )
+            charm.app_status = self._app_status_higher_priority
+            return
+        self._app_status_higher_priority = charm.MaintenanceStatus(
+            f"Refreshing. To pause refresh, run `juju config {charm.app} "
+            "pause_after_unit_refresh=all`"
+        )
+        charm.app_status = self._app_status_higher_priority
+
+    def _refresh_unit(self):
+        # TODO docstring handle resume-refresh and refresh unit's snap
+        class _ResumeRefreshAction(charm.ActionEvent):
+            def __init__(self, event: charm.ActionEvent, /):
+                super().__init__()
+                assert event.action == "resume-refresh"
+                self.check_health_of_refreshed_units: bool = event.parameters[
+                    "check-health-of-refreshed-units"
+                ]
+
+        action: typing.Optional[_ResumeRefreshAction] = None
+        if isinstance(charm.event, charm.ActionEvent) and charm.event.action == "resume-refresh":
+            action = _ResumeRefreshAction(charm.event)
+        if self._in_progress is not _MachinesInProgress.TRUE:
+            if action:
+                if self._in_progress is _MachinesInProgress.FALSE:
+                    message = "No refresh in progress"
+                elif self._in_progress is _MachinesInProgress.UNKNOWN:
+                    message = "Unable to determine if a refresh is in progress"  # TODO improve
+                else:
+                    raise TypeError
+                action.fail(message)
+            return
+
+        if action and not action.check_health_of_refreshed_units:
+            if self._get_installed_snap_revision() == self._pinned_workload_container_version:
+                action.fail("Unit already refreshed")
+                return
+            if not self._refresh_started:
+                action.log(
+                    "Warning: unable to confirm checks ran ... please check status of highest unit"
+                )  # TODO ux
+            action.log("Ignoring health of refreshed units")
+            action.log(f"Refreshing unit {charm.unit.number}")
+            assert self._force_start is None
+            # TODO logs (debug-log)
+            self._charm_specific.refresh_snap(
+                snap_revision=self._pinned_workload_container_version, refresh=self._refresh
+            )
+            action.result = {"result": f"Refreshed unit {charm.unit.number}"}
+            return
+
+        for unit in self._units:
+            databag = self._relation[unit]
+            if databag.get("installed_snap_revision") != self._pinned_workload_container_version:
+                break
+            # If "installed_snap_revision" is set, "last_refresh_to_up_to_date_charm_code_version"
+            # should also be set
+            assert databag.get("last_refresh_to_up_to_date_charm_code_version") is not None
+            if not self._is_units_databag_up_to_date(unit):
+                break
+        else:
+            # This code should never run because `self._in_progress is _MachinesInProgress.TRUE`
+            assert False
+        next_unit_to_refresh = unit
+
+        if next_unit_to_refresh != charm.unit:
+            if action:
+                assert action.check_health_of_refreshed_units
+                action.fail(f"Must run action on unit {next_unit_to_refresh.number}")
+            return
+
+        if self._pause_after is _PauseAfter.NONE and action:
+            action.fail(
+                "`pause_after_unit_refresh` config is set to `none`. This action is not applicable."
+            )
+            action = None  # todo comment
+
+        if not self._refresh_started:
+            if action:
+                action.fail(f"Unit {self._units[0]} is unhealthy. Refresh will not resume.")
+            return
+
+        # Whether all units before this unit in the refresh order are up-to-date and have
+        # allowed the next unit to refresh
+        all_previous_units_have_allowed_this_unit_to_refresh = False
+        for unit in self._units:
+            if unit == charm.unit:
+                all_previous_units_have_allowed_this_unit_to_refresh = True
+                break
+            databag = self._relation[unit]
+            if (
+                databag.get(
+                    "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date"
+                )
+                is not True
+            ):
+                break
+            if databag.get("installed_snap_revision") != self._pinned_workload_container_version:
+                break
+            # If "installed_snap_revision" is set,
+            # "last_refresh_to_up_to_date_charm_code_version" should also be set
+            assert databag.get("last_refresh_to_up_to_date_charm_code_version") is not None
+            if not self._is_units_databag_up_to_date(unit):
+                break
+        if not all_previous_units_have_allowed_this_unit_to_refresh:
+            first_unit_that_has_not_allowed_this_unit_to_refresh = unit
+            if action:
+                action.fail(
+                    f"Unit {first_unit_that_has_not_allowed_this_unit_to_refresh.number} is "
+                    "unhealthy. Refresh will not resume."
+                )
+            return
+
+        if (
+            self._pause_after is _PauseAfter.UNKNOWN
+            or self._pause_after is _PauseAfter.ALL
+            or (self._pause_after is _PauseAfter.FIRST and self._units.index(charm.unit) == 1)
+        ):
+            # resume-refresh action required to refresh this unit
+
+            if not action:
+                return
+        else:
+            if action:
+                # TODO comment—this unit would've refreshed without action, fail action to improve user's mental model
+                action.fail("Unit currently refreshing")  # TODO UX
+                action = None  # TODO comment
+
+        assert self._get_installed_snap_revision() != self._pinned_workload_container_version
+        if action:
+            if self._pause_after is _PauseAfter.FIRST:
+                action.log(f"Refresh resumed. Refreshing unit {charm.unit.number}")
+            else:
+                action.log(f"Refreshing unit {charm.unit.number}")
+        if self._force_start is not None:
+            self._force_start.log(f"Refreshing unit {charm.unit.number}")
+        self._charm_specific.refresh_snap(
+            snap_revision=self._pinned_workload_container_version, refresh=self._refresh
+        )
+        if action:
+            if self._pause_after is _PauseAfter.FIRST:
+                action.result = {
+                    "result": f"Refresh resumed. Unit {charm.unit.number} has refreshed"
+                }
+            else:
+                action.result = {"result": f"Refreshed unit {charm.unit.number}"}
+        if self._force_start is not None:
+            self._force_start.log(f"Refreshed unit {charm.unit.number}")
+
+    def __init__(self, charm_specific: CharmSpecific, /, *, refresh: Refresh):
+        assert charm_specific.cloud is Cloud.MACHINES
+        self._charm_specific = charm_specific
+        self._refresh = refresh
+
+        _LOCAL_STATE.mkdir(exist_ok=True)
+        # Save state if this unit is tearing down.
+        # Used in future Juju events
+        tearing_down = _LOCAL_STATE / "machines_unit_tearing_down"
+        if (
+            # This check works for both principal & subordinate charms
+            isinstance(charm.event, charm.RelationDepartedEvent)
+            and charm.event.departing_unit == charm.unit
+        ):
+            # This unit is tearing down
+            tearing_down.touch()
+
+        # Check if this unit is tearing down
+        if tearing_down.exists():
+            # TODO improve docstring with exceptions that can be raised
+            if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
+                "pre-refresh-check",
+                "force-refresh-start",
+                "resume-refresh",
+            ):
+                charm.event.fail("Unit tearing down")
+
+            tearing_down_logged = _LOCAL_STATE / "machines_unit_tearing_down_logged"
+            if not tearing_down_logged.exists():
+                logger.info("Unit tearing down")
+                tearing_down_logged.touch()
+
+            raise UnitTearingDown
+
+        # Get installed charm revision
+        self._installed_charm_revision_raw = _RawCharmRevision.from_file()
+        """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+
+        # Save state if this unit's charm code was refreshed to the up-to-date charm code version
+        # On machines, we rely on data in the peer relation to determine if a refresh is in
+        # progress. The relation databags visible from this unit may be outdated if a unit has many
+        # events in queue or if a unit is raising an uncaught exception. If a unit is raising an
+        # uncaught exception, it is not able to save changes to its relation databag.
+        # Consider the following example:
+        # - User refreshes from charm revision 10007 to 10008
+        # - Highest unit's charm code refreshes snap from revision 20001 to 20002 and raises an
+        #   uncaught exception in the same Juju event
+        # - User refreshes (rollback) to charm revision 10007
+        # In this example, the highest unit was unable to update its databag while charm revision
+        # 10008 and snap revision 20002 were installed. After the rollback starts, from the
+        # perspective of the other units, the highest unit's databag says that snap revision 20001
+        # and charm revision 10007 are installed (and, therefore, a refresh is not in progress)—
+        # but, in reality, snap revision 20002 is installed.
+        # To detect this, we need a mechanism to determine if a unit's databag is outdated.
+        # If the charm revision in the databag is different from this unit's charm revision, we
+        # know the databag is outdated.
+        # If the charm revision is the same, then we do not know if the databag was last updated
+        # after the latest refresh to that charm revision or if it was last updated after a
+        # previous refresh to that charm revision.
+        # If we store the timestamp of the last two times this unit was refreshed, and a unit's
+        # databag was last updated before this unit's second to last refresh, then we know that
+        # unit's databag is outdated.
+        # (We cannot use the timestamp of the last refresh since this unit could get refreshed
+        # before or after other units for the same `juju refresh`.)
+        # There are a couple caveats:
+        # 1. This relies on the unit machines' clocks to be roughly in sync. This is not ideal, but
+        #    there is no better alternative to handle the refresh example above, which is one of
+        #    the most likely rollback cases.
+        #    If Juju were to expose "charm modified version", which is an integer that increments
+        #    on every `juju refresh`, we could replace the timestamp with that—which would remove
+        #    the requirement for clocks to be roughly in sync.
+        # 2. If a unit is raising an uncaught exception, Juju may refresh the charm code without an
+        #    upgrade-charm event (https://bugs.launchpad.net/juju/+bug/2068500). If this happens,
+        #    Juju may also refresh that unit's charm code to a version that is not up-to-date. In
+        #    contrast, if Juju emits an upgrade-charm event, it appears to be guaranteed that the
+        #    charm code was the up-to-date version at the time of the refresh.
+        #    Consider this example:
+        #    - User deploys units 0, 1, and 2 with charm revision 5
+        #    - Unit 2 is raising an uncaught exception
+        #    - User refreshes app to charm revision 6
+        #    - Units 0 and 1 refresh to revision 6 but unit 2 is still in error on revision 5
+        #    - User refreshes (rollback) app to charm revision 5
+        #    - Units 0 and 1 refresh to revision 5 but unit 2 is still in error
+        #    - Unit 2 gets refreshed without upgrade-charm event to revision 6
+        #    - Unit 2 gets refreshed to revision 5
+        #    The issue here is that unit 2 now thinks that units 0 & 1 have outdated databags
+        #    since its refresh to revision 6 happened after units 0 & 1 rolled back to revision 5.
+        #    From testing, this example is not possible—units 0 and 1 cannot get refreshed to
+        #    revision 5 before unit 2 refreshes to revision 6. However, in testing, it was possible
+        #    for units 0 and 1 to refresh to revision 5 only 0.4 seconds after unit 2 was refreshed
+        #    to revision 6. (And there's a decent possibility that the clocks for each unit could
+        #    be out of sync by more than 0.4 seconds.)
+        #    To mitigate this issue, we only store the timestamp on refresh if we know that the
+        #    refresh was to the up-to-date charm code version.
+        self._history = _CharmCodeRefreshHistory.from_file()
+        # NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be out
+        # of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
+        # `None`
+        # TODO docstring?
+        self._refresh_started_local_state = _LOCAL_STATE / "machines_refresh_started"
+        if (
+            self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            != _dot_juju_charm_modified_time()
+        ):
+            # Charm code has been refreshed
+
+            self._refresh_started_local_state.unlink(missing_ok=True)
+            # If Juju emits an upgrade-charm event, the charm code version is up-to-date
+            # If Juju emits a config-changed event, because of this Juju bug
+            # https://bugs.launchpad.net/juju/+bug/2084886, the charm code version is up-to-date
+            # (If that bug is fixed, this code must be changed)
+            # Juju does not always emit an upgrade-charm event when the charm code is refreshed
+            # (https://bugs.launchpad.net/juju/+bug/2068500). If that bug happens, (from testing)
+            # Juju will likely skip the upgrade-charm event but will correctly emit a
+            # leader-settings-changed event (if unit is not leader) and then a config-changed event
+            # So, in most cases, this unit will get a config-changed event after the charm code is
+            # refreshed to the up-to-date version.
+            if isinstance(charm.event, charm.UpgradeCharmEvent) or isinstance(
+                charm.event, charm.ConfigChangedEvent
+            ):
+                # Charm code version is up-to-date
+
+                # TODO: log (here or after file saved)
+                self._history.second_to_last_refresh_to_up_to_date_charm_code_version = (
+                    self._history.last_refresh_to_up_to_date_charm_code_version
+                )
+                self._history.last_refresh_to_up_to_date_charm_code_version = _HistoryEntry(
+                    charm_revision=self._installed_charm_revision_raw,
+                    time_of_refresh=_dot_juju_charm_modified_time(),
+                )
+                self._history.save_to_file()
+            else:
+                logger.warning(
+                    "This unit's charm code was refreshed without a Juju `upgrade-charm` event. "
+                    "This is a Juju bug (https://bugs.launchpad.net/juju/+bug/2068500). Waiting "
+                    "for an `upgrade-charm` or `config-changed` event to determine if this unit's "
+                    "charm code is up-to-date."
+                    # TODO: be less specific about events? instruct user to wait, then change pause after config to something invalid & then change it back?
+                )
+                # TODO ux: add lower priority unit status for this?
+
+        self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
+        if not self._relation:
+            raise _PeerRelationMissing
+
+        self._installed_workload_version = _LOCAL_STATE / "machines_installed_workload_version"
+        """File containing upstream workload version (e.g. "14.11") installed on this unit
+
+        Used for compatibility check & displayed to user
+        """
+        # Get versions from refresh_versions.toml
+        refresh_versions = _MachinesRefreshVersions()
+        self._installed_charm_version = refresh_versions.charm
+        """This unit's charm version"""
+        self._pinned_workload_version = refresh_versions.workload
+        """Upstream workload version (e.g. "14.11") pinned by this unit's charm code
+
+        Used for compatibility check & displayed to user
+        """
+        self._workload_snap_name = refresh_versions.snap_name
+        self._pinned_workload_container_version = refresh_versions.snap_revision
+        """Snap revision pinned by this unit's charm code for this unit's architecture
+
+        (e.g. "20001")
+        """
+
+        self._refresh_started = self._refresh_started_local_state.exists()
+        """Whether this app has started to refresh to the snap revision pinned in this unit's charm code
+        
+        `True` if this app is rolling back, if automatic checks have succeeded, or if the user
+        successfully forced the refresh to start with the force-refresh-start action
+        `False` otherwise
+
+        Automatic checks include:
+
+        - workload container check
+        - compatibility checks
+        - pre-refresh checks
+
+        If the user runs `juju refresh` while a refresh is in progress, this will be reset to
+        `False` unless the `juju refresh` is a rollback
+        
+        NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be out
+        of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
+        `None`
+        """
+
+        # Determine `self._refresh_started` and propagate
+        # "refresh_started_if_this_units_databag_is_up_to_date" in other units' databags to this
+        # unit's local state and databag, if the other unit's databag is up-to-date (from the
+        # perspective of this unit).
+        # The propagation preserves data if this app is scaled down (prevents workload container
+        # check, compatibility checks, and pre-refresh checks from running again on scale down).
+        # NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be out
+        # of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
+        # `None`
+        if (
+            not self._refresh_started
+            # Whether this unit's charm code version is up-to-date
+            and self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            == _dot_juju_charm_modified_time()
+        ):
+            for unit, databag in self._relation.other_units.items():
+                if databag.get("refresh_started_if_this_units_databag_is_up_to_date") is not True:
+                    continue
+                # If "refresh_started_if_this_units_databag_is_up_to_date" is set,
+                # "last_refresh_to_up_to_date_charm_code_version" should also be set
+                assert databag.get("last_refresh_to_up_to_date_charm_code_version") is not None
+                # Check if other unit's databag is up-to-date
+                up_to_date = self._is_units_databag_up_to_date_unknown(unit)
+                if up_to_date is _MachinesDatabagUpToDate.TRUE:
+                    # Other unit's databag is up-to-date
+
+                    self._refresh_started = True
+                    # Propagate "refresh_started_if_this_units_databag_is_up_to_date" to this
+                    # unit's local state & databag
+                    self._refresh_started_local_state.touch()
+                    self._relation.my_unit[
+                        "refresh_started_if_this_units_databag_is_up_to_date"
+                    ] = True
+                    break
+                elif up_to_date is _MachinesDatabagUpToDate.UNKNOWN:
+                    # It is not possible to determine if the other unit's databag is up-to-date
+                    # This is initial installation or this unit is a new unit that was added during
+                    # scale up
+                    # (Otherwise,
+                    # `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` would
+                    # not be `None`—and, therefore, `up_to_date` would not be
+                    # `_MachinesDatabagUpToDate.UNKNOWN`. On initial installation or scale up,
+                    # `self._history.last_refresh_to_up_to_date_charm_code_version` is set. On the
+                    # first refresh after initial installation or scale up,
+                    # `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
+                    # set.)
+                    # On scale up, there are two possible situations:
+                    # 1. All units (that set refresh_started_... to `True`) have up-to-date
+                    #    databags.
+                    # 2. 1+ units (that set refresh_started_... to `True`) have outdated databags.
+                    # Situation #1 is much more likely and it is important that, in situation #1,
+                    # the automatic checks do not run again on scale up if they have already run.
+                    # Therefore, we should assume that the other unit's databag is up-to-date.
+                    # However, to minimize the damage if our assumption is incorrect, we should not
+                    # propagate "refresh_started_if_this_units_databag_is_up_to_date" to this
+                    # unit's databag.
+                    # In situation #2, if we were to propagate
+                    # "refresh_started_if_this_units_databag_is_up_to_date", other units would
+                    # believe the refresh has started since this unit is up-to-date—and the
+                    # automatic checks might never run for the refresh.
+                    # Instead, by not propagating
+                    # "refresh_started_if_this_units_databag_is_up_to_date", it is possible to
+                    # recover—once the unit(s) with the outdated databags update their databags
+                    # (e.g. because they stopped raising an uncaught exception), then all units
+                    # will detect that the automatic checks have not been run for the current
+                    # refresh & the refresh will pause until the highest unit runs the automated
+                    # checks.
+                    # Furthermore, even before the unit(s) with the outdated databags update their
+                    # databags, units that were present before the scale up will detect that the
+                    # automatic checks have not been run & will not refresh the workload snap on
+                    # their unit.
+                    # NOTE: Because we do not propagate
+                    # "refresh_started_if_this_units_databag_is_up_to_date" to this unit's local
+                    # state & databag, `self._refresh_started` and
+                    # `self._refresh_started_local_state.exists()` will be out of sync
+                    self._refresh_started = True
+                    break
+
+        # Propagate local state to this unit's databag.
+        # Used to persist data to databag in case an uncaught exception was raised in the Juju
+        # event where the data was originally set
+        self._relation.my_unit["refresh_started_if_this_units_databag_is_up_to_date"] = (
+            self._refresh_started_local_state.exists()
+        )
+
+        # Propagate local state to this unit's databag.
+        # Used to persist data to databag in case an uncaught exception was raised in the Juju
+        # event where the data was originally set
+        # (Do not propagate `self._history.second_to_last_refresh_to_up_to_date_charm_code_version`
+        # since other units do not need that information)
+        self._relation.my_unit["last_refresh_to_up_to_date_charm_code_version"] = (
+            dataclasses.asdict(self._history.last_refresh_to_up_to_date_charm_code_version)
+        )
+
+        # Propagate installed snap revision to this unit's databag
+        # In case an uncaught exception was raised in the Juju event where `update_snap_revision()`
+        # was called
+        self._update_snap_revision(raise_if_not_installed=False)
+
+        # Check if all units have joined the peer relation on initial install or scale up
+        # During initial installation or when a new unit is added during scale up, the peer
+        # relation will be available but will be missing units.
+        # When a new unit is added during scale up, it should wait until it sees all other units in
+        # the peer relation before it determines if a refresh is in progress.
+        # After this unit sees all other units in the peer relation once, it should not check for
+        # that condition again. If this unit is behind on events (e.g. because the charm code is
+        # raising an uncaught exception), there may be a mismatch between the current units and the
+        # units that this unit sees in the peer relation. If there is such a mismatch, that should
+        # not prevent this unit from executing the code below this check (so that, among other
+        # things, rollback is possible).
+        peer_relation_initialized = _LOCAL_STATE / "machines_peer_relation_initialized"
+        if not peer_relation_initialized.exists():
+            # Whether this unit's app is subordinated to a principal app
+            is_subordinate = os.environ["JUJU_PRINCIPAL_UNIT"] != ""
+
+            result = json.loads(
+                subprocess.run(
+                    ["goal-state", "--format", "json"], capture_output=True, check=True, text=True
+                ).stdout
+            )
+            if is_subordinate:
+                # When a subordinate unit is tearing down, it is not possible to reliably determine
+                # the number of planned units from `goal-state`
+                assert not tearing_down.exists()
+
+                # Example `result`:
+                # {
+                #     "units": {},
+                #     "relations": {
+                #         "backend-database": {
+                #             "mysql": {"status": "joined", "since": "2025-03-10 10:51:40Z"},
+                #             "mysql/0": {"status": "active", "since": "2025-03-10 10:51:40Z"},
+                #         },
+                #         "database": {
+                #             "app1": {"status": "joined", "since": "2025-03-10 10:51:41Z"},
+                #             "app1/0": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #             "app1/1": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #             "app1/2": {"status": "active", "since": "2025-03-10 10:52:52Z"},
+                #         },
+                #         "foobar": {
+                #             "app1": {"status": "joined", "since": "2025-03-10 10:51:44Z"},
+                #             "app1/0": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #             "app1/1": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #             "app1/2": {"status": "active", "since": "2025-03-10 10:52:52Z"},
+                #             "app2": {"status": "joined", "since": "2025-03-10 10:51:46Z"},
+                #             "app2/0": {"status": "waiting", "since": "2025-03-10 10:50:42Z"},
+                #             "app2/1": {"status": "waiting", "since": "2025-03-10 10:50:38Z"},
+                #         },
+                #     },
+                # }
+
+                # Example: "app1"
+                principal_app = charm.Unit(os.environ["JUJU_PRINCIPAL_UNIT"]).app
+                principal_units_by_endpoint = {}
+                for endpoint, endpoint_value in result["relations"].items():
+                    principal_units = {}
+                    for unit_or_app, value in endpoint_value.items():
+                        if "/" not in unit_or_app:
+                            # `unit_or_app` is app
+                            continue
+                        if charm.Unit(unit_or_app).app == principal_app:
+                            principal_units[unit_or_app] = value
+                    if principal_units:
+                        principal_units_by_endpoint[endpoint] = principal_units
+                # Example `principal_units_by_endpoint`:
+                # {
+                #     "database": {
+                #         "app1/0": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #         "app1/1": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #         "app1/2": {"status": "active", "since": "2025-03-10 10:52:52Z"},
+                #     },
+                #     "foobar": {
+                #         "app1/0": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #         "app1/1": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #         "app1/2": {"status": "active", "since": "2025-03-10 10:52:52Z"},
+                #     },
+                # }
+                if not principal_units_by_endpoint:
+                    raise ValueError(
+                        f"Invalid `goal-state` output—no principal units found: {repr(result)}"
+                    )
+                elif len(principal_units_by_endpoint) > 1:
+                    # Check that unit values are identical on each endpoint
+                    values = iter(principal_units_by_endpoint.values())
+                    first_value = next(values)
+                    if not all(first_value == value for value in values):
+                        raise ValueError(
+                            f"Invalid `goal-state` output—different statuses for {principal_app=}"
+                            f" across endpoints: {principal_units_by_endpoint=}"
+                        )
+                # Example `principal_units`:
+                # {
+                #     "app1/0": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #     "app1/1": {"status": "active", "since": "2025-03-10 10:54:12Z"},
+                #     "app1/2": {"status": "active", "since": "2025-03-10 10:52:52Z"},
+                # }
+                _, principal_units = principal_units_by_endpoint.popitem()
+                planned_units = sum(
+                    1
+                    for principal_unit in principal_units.values()
+                    if principal_unit["status"] != "dying"
+                )
+            else:
+                planned_units = sum(
+                    1 for unit in result["units"].values() if unit["status"] != "dying"
+                )
+
+            if planned_units == len(self._relation.all_units):
+                # All units have joined the peer relation
+                peer_relation_initialized.touch()
+            else:
+                raise PeerRelationNotReady
+
+        self._in_progress = self._determine_in_progress()
+
+        # pre-refresh-check action
+        if isinstance(charm.event, charm.ActionEvent) and charm.event.action == "pre-refresh-check":
+            if self._in_progress is not _MachinesInProgress.FALSE:
+                if self._in_progress is _MachinesInProgress.TRUE:
+                    charm.event.fail("Refresh already in progress")
+                elif self._in_progress is _MachinesInProgress.UNKNOWN:
+                    charm.event.fail("Refresh already in progress")  # TODO ux
+                else:
+                    raise TypeError
+            elif charm.is_leader:
+                try:
+                    self._charm_specific.run_pre_refresh_checks_before_any_units_refreshed()
+                except PrecheckFailed as exception:
+                    charm.event.fail(
+                        "Charm is not ready for refresh. Pre-refresh check failed: "
+                        f"{exception.message}"
+                    )
+                else:
+                    charm.event.result = {
+                        "result": (
+                            "Charm is ready for refresh. For refresh instructions, see "
+                            f"{self._charm_specific.refresh_user_docs_url}\n"
+                            "After the refresh has started, use this command to rollback:\n"
+                            f"`juju refresh {charm.app} --revision "
+                            f"{self._pinned_workload_container_version}`"
+                        )
+                    }
+                    logger.info("Pre-refresh check succeeded")
+            else:
+                charm.event.fail(
+                    f"Must run action on leader unit. (e.g. `juju run {charm.app}/leader "
+                    "pre-refresh-check`)"
+                )
+
+        self._units = sorted(self._relation.all_units, reverse=True)
+        """Sorted from highest to lowest unit number (refresh order)"""
+        self._start_refresh()
+        self._pause_after = _PauseAfter(charm.config["pause_after_unit_refresh"])
+
+        # todo comment app status set ignoring resume refresh (so same ux when resume-refresh ran on non-leader)
+        self._set_app_status()  # TODO comment for long running snap refresh
+        self._refresh_unit()
+        # Update `self._in_progress` and app status after possible snap refresh
+        old_in_progress = self._in_progress
+        self._in_progress = self._determine_in_progress()
+        self._refresh_completed_this_event = old_in_progress is False and self._in_progress is True
+        """Whether this app's refresh completed during this Juju event"""
+        self._set_app_status()
+
+        if self._in_progress is _MachinesInProgress.FALSE:
+            # todo comment: unlike k8s, don't clean up state (no need since no lists that could grow indef) and to avoid race condition on scale up while refresh finishing
+            if self._get_installed_snap_revision():
+                self._installed_workload_version.write_text(self._pinned_workload_version)
+            # todo comment: used to trigger event on last unit to refresh after refresh complete
+            self._relation.my_unit["_unused_last_completed_refresh"] = dataclasses.asdict(
+                self._history.last_refresh_to_up_to_date_charm_code_version
+            )
+            # Whether this unit is leader
+            if self._relation.my_app_rw is not None:
+                # Save versions in app databag for next refresh
+                self._original_versions = _OriginalVersions(
+                    workload=self._pinned_workload_version,
+                    workload_container=self._pinned_workload_container_version,
+                    installed_workload_container_matched_pinned_container=True,
+                    charm=self._installed_charm_version,
+                    charm_revision_raw=self._installed_charm_revision_raw,
+                )
+                self._original_versions.write_to_app_databag(self._relation.my_app_rw)

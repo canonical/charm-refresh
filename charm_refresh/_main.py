@@ -8,7 +8,7 @@ import logging
 import pathlib
 import typing
 
-import charm
+import charm_ as charm
 import charm_json
 import lightkube
 import lightkube.models.authorization_v1

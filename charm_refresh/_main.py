@@ -700,13 +700,13 @@ class _OriginalVersions:
 
     workload: typing.Optional[str]
     """Original upstream workload version (e.g. "14.11")
-    
+
     Always a str if `installed_workload_container_matched_pinned_container` is `True`
     `None` if `installed_workload_container_matched_pinned_container` is `False`
     """
     workload_container: str
     """Original workload image digest
-        
+
     (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
     """
     installed_workload_container_matched_pinned_container: bool
@@ -1057,17 +1057,17 @@ class _Kubernetes:
             "refresh_started_if_app_controller_revision_hash_in", tuple()
         )
         """Whether this app has started to refresh to `self._app_controller_revision`
-        
+
         `True` if this app is rolling back, if automatic checks have succeeded, or if the user
         successfully forced the refresh to start with the force-refresh-start action
         `False` otherwise
-        
+
         Automatic checks include:
-        
+
         - workload container check
         - compatibility checks
         - pre-refresh checks
-        
+
         If the user runs `juju refresh` while a refresh is in progress, this will be reset to
         `False` unless the `juju refresh` is a rollback
         """
@@ -1827,7 +1827,7 @@ class _Kubernetes:
         """This unit's charm version"""
         self._pinned_workload_version = refresh_versions.workload
         """Upstream workload version (e.g. "14.11") pinned by this unit's charm code
-        
+
         Used for compatibility check & displayed to user
         """
 
@@ -1914,14 +1914,14 @@ class _Kubernetes:
             image_digest = None
         self._installed_workload_image_name: str = image_name
         """This unit's workload image name
-        
+
         Includes registry and path
-        
+
         (e.g. "registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image")
         """
         self._installed_workload_container_version: typing.Optional[str] = image_digest
         """This unit's workload image digest
-        
+
         (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
         """
 

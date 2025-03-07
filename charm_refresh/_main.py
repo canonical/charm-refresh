@@ -1579,7 +1579,7 @@ class _Kubernetes:
             isinstance(charm.event, charm.RelationDepartedEvent)
             and charm.event.departing_unit == charm.unit
         ):
-            # This unit is tearing down and 1+ other units are not tearing down
+            # This unit is tearing down
             # TODO comment: is this true when scaling to 0 units? do we care for this case?
             tearing_down.touch()
 
@@ -1674,9 +1674,9 @@ class _Kubernetes:
             # `self._app_controller_revision` is updated) before the first unit stops to refresh
             and self._in_progress
         ):
-            # If `tearing_down.exists()`, this unit is being removed for scale down and we should
-            # not raise the partition—so that the partition never exceeds the highest unit number
-            # (which would cause `juju refresh` to not trigger any Juju events).
+            # If `tearing_down.exists()`, this unit is being removed and we should not raise the
+            # partition—so that the partition never exceeds the highest unit number (which would
+            # cause `juju refresh` to not trigger any Juju events).
             assert not tearing_down.exists()
             # This unit could be refreshing or just restarting.
             # Raise StatefulSet partition to prevent other units from refreshing.
@@ -1699,9 +1699,9 @@ class _Kubernetes:
             _LOCAL_STATE / "kubernetes_had_opportunity_to_raise_partition_after_pod_restart"
         )
         if not had_opportunity_to_raise_partition_after_pod_restart.exists() and self._in_progress:
-            # If `tearing_down.exists()`, this unit is being removed for scale down and we should
-            # not raise the partition—so that the partition never exceeds the highest unit number
-            # (which would cause `juju refresh` to not trigger any Juju events).
+            # If `tearing_down.exists()`, this unit is being removed and we should not raise the
+            # partition—so that the partition never exceeds the highest unit number (which would
+            # cause `juju refresh` to not trigger any Juju events).
             assert not tearing_down.exists()
             # This unit could have been refreshing or just restarting.
             # Raise StatefulSet partition to prevent other units from refreshing.

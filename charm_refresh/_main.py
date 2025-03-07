@@ -1580,7 +1580,6 @@ class _Kubernetes:
             and charm.event.departing_unit == charm.unit
         ):
             # This unit is tearing down
-            # TODO comment: is this true when scaling to 0 units? do we care for this case?
             tearing_down.touch()
 
         # Check if Juju app was deployed with `--trust` (needed to patch StatefulSet partition)

@@ -6,6 +6,7 @@ import functools
 import json
 import logging
 import pathlib
+import subprocess
 import typing
 
 import charm
@@ -1572,16 +1573,6 @@ class _Kubernetes:
         self._charm_specific = charm_specific
 
         _LOCAL_STATE.mkdir(exist_ok=True)
-        # Save state if this unit is tearing down.
-        # Used in future Juju events
-        tearing_down = _LOCAL_STATE / "kubernetes_unit_tearing_down"
-        if (
-            isinstance(charm.event, charm.RelationDepartedEvent)
-            and charm.event.departing_unit == charm.unit
-        ):
-            # This unit is tearing down and 1+ other units are not tearing down
-            # TODO comment: is this true when scaling to 0 units? do we care for this case?
-            tearing_down.touch()
 
         # Check if Juju app was deployed with `--trust` (needed to patch StatefulSet partition)
         if not (
@@ -1638,7 +1629,17 @@ class _Kubernetes:
         """This unit's controller revision"""
 
         # Check if this unit is tearing down
-        if tearing_down.exists():
+        # Use `goal-state` instead of saving local state on RelationDepartedEvent in case of pod
+        # restart after RelationDepartedEvent
+        # (`goal-state` cannot be used for this purpose on [machines] subordinate apps)
+        result = json.loads(
+            subprocess.run(
+                ["goal-state", "--format", "json"], capture_output=True, check=True, text=True
+            ).stdout
+        )
+        tearing_down = result["units"][charm.unit]["status"] == "dying"
+
+        if tearing_down:
             # TODO improve docstring with exceptions that can be raised
             # TODO is this k8s only?
             if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
@@ -1674,10 +1675,10 @@ class _Kubernetes:
             # `self._app_controller_revision` is updated) before the first unit stops to refresh
             and self._in_progress
         ):
-            # If `tearing_down.exists()`, this unit is being removed for scale down and we should
-            # not raise the partition—so that the partition never exceeds the highest unit number
-            # (which would cause `juju refresh` to not trigger any Juju events).
-            assert not tearing_down.exists()
+            # If `tearing_down`, this unit is being removed and we should not raise the partition—
+            # so that the partition never exceeds the highest unit number (which would cause
+            # `juju refresh` to not trigger any Juju events).
+            assert not tearing_down
             # This unit could be refreshing or just restarting.
             # Raise StatefulSet partition to prevent other units from refreshing.
             # If the unit is just restarting, the leader unit will lower the partition.
@@ -1699,10 +1700,10 @@ class _Kubernetes:
             _LOCAL_STATE / "kubernetes_had_opportunity_to_raise_partition_after_pod_restart"
         )
         if not had_opportunity_to_raise_partition_after_pod_restart.exists() and self._in_progress:
-            # If `tearing_down.exists()`, this unit is being removed for scale down and we should
-            # not raise the partition—so that the partition never exceeds the highest unit number
-            # (which would cause `juju refresh` to not trigger any Juju events).
-            assert not tearing_down.exists()
+            # If `tearing_down`, this unit is being removed and we should not raise the partition—
+            # so that the partition never exceeds the highest unit number (which would cause
+            # `juju refresh` to not trigger any Juju events).
+            assert not tearing_down
             # This unit could have been refreshing or just restarting.
             # Raise StatefulSet partition to prevent other units from refreshing.
             # If the unit was just restarting, the leader unit will lower the partition.

@@ -1210,6 +1210,7 @@ class _Kubernetes:
                     "`juju refresh` was run with missing/incorrect OCI resource. Rollback with "
                     "instructions in docs or see `juju debug-log`"
                 )
+                charm.unit_status = self._unit_status_higher_priority
                 logger.error(
                     "`juju refresh` was run with missing or incorrect OCI resource. Rollback by "
                     f"running `{self._rollback_command}`. If you are intentionally attempting to "
@@ -1300,6 +1301,7 @@ class _Kubernetes:
                     "Refresh incompatible. Rollback with instructions in Charmhub docs or see "
                     "`juju debug-log`"
                 )
+                charm.unit_status = self._unit_status_higher_priority
                 logger.info(
                     f"Refresh incompatible. Rollback by running `{self._rollback_command}`. "
                     "Continuing this refresh may cause data loss and/or downtime. The refresh can "
@@ -1324,6 +1326,7 @@ class _Kubernetes:
                 self._unit_status_higher_priority = charm.BlockedStatus(
                     f"Rollback with `juju refresh`. Pre-refresh check failed: {exception.message}"
                 )
+                charm.unit_status = self._unit_status_higher_priority
                 logger.error(
                     f"Pre-refresh check failed: {exception.message}. Rollback by running "
                     f"`{self._rollback_command}`. Continuing this refresh may cause data loss "

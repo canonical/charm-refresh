@@ -335,7 +335,7 @@ class CharmSpecific(abc.ABC):
         """
         self.run_pre_refresh_checks_after_1_unit_refreshed()
 
-    def refresh_snap(self, *, snap_revision: str, refresh: "Refresh") -> None:
+    def refresh_snap(self, *, snap_name: str, snap_revision: str, refresh: "Refresh") -> None:
         """Refresh workload snap
 
         `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
@@ -463,6 +463,19 @@ def _convert_to_ops_status(status: charm.Status) -> ops.StatusBase:
     raise ValueError(f"Unknown type {repr(type(status).__name__)}: {repr(status)}")
 
 
+def snap_name() -> str:
+    """Get workload snap name
+
+    This function can be used during initial snap installation or during snap removal on teardown.
+
+    When refreshing the snap, the snap name can be read from the `refresh_snap` method's
+    `snap_name` parameter.
+
+    Only applicable if cloud is `Cloud.MACHINES`
+    """
+    return _MachinesRefreshVersions().snap_name
+
+
 class Refresh:
     # TODO: add note about putting at end of charm __init__
 
@@ -533,7 +546,6 @@ class Refresh:
 
     @property
     def pinned_snap_revision(self) -> str:
-        # TODO: move to CharmSpecific so it can be accessed during install event where refresh peer relation might be missing?
         """Workload snap revision pinned by this unit's current charm code
 
         This attribute should only be read during initial snap installation and should not be read
@@ -541,6 +553,8 @@ class Refresh:
 
         During a refresh, the snap revision should be read from the `refresh_snap` method's
         `snap_revision` parameter.
+
+        Only applicable if cloud is `Cloud.MACHINES`
         """
         if not isinstance(self._refresh, _Machines):
             raise ValueError(
@@ -2584,7 +2598,7 @@ class _Machines:
                 )
                 # The leader unit will set app status to show that refresh is incompatible
                 if force_start:
-                    force_start.fail(f"Refresh incompatible. Rollback with `juju refresh`")
+                    force_start.fail("Refresh incompatible. Rollback with `juju refresh`")
                 return
         if force_start and not force_start.run_pre_refresh_checks:
             force_start.log("Skipping pre-refresh checks")
@@ -2755,7 +2769,9 @@ class _Machines:
             assert self._force_start is None
             # TODO logs (debug-log)
             self._charm_specific.refresh_snap(
-                snap_revision=self._pinned_workload_container_version, refresh=self._refresh
+                snap_name=self._workload_snap_name,
+                snap_revision=self._pinned_workload_container_version,
+                refresh=self._refresh,
             )
             action.result = {"result": f"Refreshed unit {charm.unit.number}"}
             return
@@ -2846,7 +2862,9 @@ class _Machines:
         if self._force_start is not None:
             self._force_start.log(f"Refreshing unit {charm.unit.number}")
         self._charm_specific.refresh_snap(
-            snap_revision=self._pinned_workload_container_version, refresh=self._refresh
+            snap_name=self._workload_snap_name,
+            snap_revision=self._pinned_workload_container_version,
+            refresh=self._refresh,
         )
         if action:
             if self._pause_after is _PauseAfter.FIRST:

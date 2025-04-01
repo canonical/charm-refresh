@@ -7,4 +7,5 @@ from ._main import (
     PrecheckFailed,
     Refresh,
     UnitTearingDown,
+    snap_name,
 )

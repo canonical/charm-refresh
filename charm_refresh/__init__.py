@@ -1,11 +1,14 @@
 from ._main import (
-    CharmSpecific,
+    CharmSpecificCommon,
+    CharmSpecificKubernetes,
+    CharmSpecificMachines,
     CharmVersion,
-    Cloud,
+    Common,
+    Kubernetes,
     KubernetesJujuAppNotTrusted,
+    Machines,
     PeerRelationNotReady,
     PrecheckFailed,
-    Refresh,
     UnitTearingDown,
     snap_name,
 )

@@ -27,16 +27,6 @@ import yaml
 logger = logging.getLogger(__name__)
 
 
-class Cloud(enum.Enum):
-    """Cloud that a charm is deployed in
-
-    https://juju.is/docs/juju/cloud#heading--machine-clouds-vs--kubernetes-clouds
-    """
-
-    KUBERNETES = enum.auto()
-    MACHINES = enum.auto()
-
-
 @functools.total_ordering
 class CharmVersion:
     """Charm code version
@@ -140,14 +130,8 @@ class PrecheckFailed(Exception):
 
 
 @dataclasses.dataclass(eq=False)
-class CharmSpecific(abc.ABC):
-    """Charm-specific callbacks & configuration for in-place refreshes"""
-
-    cloud: Cloud
-    """Cloud that the charm is deployed in
-
-    https://juju.is/docs/juju/cloud#heading--machine-clouds-vs--kubernetes-clouds
-    """
+class CharmSpecificCommon(abc.ABC):
+    """Charm-specific callbacks & configuration for in-place refreshes TODO"""
 
     workload_name: str
     """Human readable workload name (e.g. PostgreSQL)"""
@@ -161,34 +145,7 @@ class CharmSpecific(abc.ABC):
     """
     # TODO: add note about link in old version of charm & keeping evergreen
 
-    oci_resource_name: typing.Optional[str] = None
-    """Resource name for workload OCI image in metadata.yaml `resources`
-
-    (e.g. postgresql-image)
-
-    Required if `cloud` is `Cloud.KUBERNETES`
-
-    https://juju.is/docs/sdk/metadata-yaml#heading--resources
-    """
-
-    # TODO: add note about upstream-source for pinning?
-    # TODO: add note about `containers` assumed in metadata.yaml (to find container name)
-
-    def __post_init__(self):
-        """Validate values of dataclass fields
-
-        Subclasses should not override these validations
-        """
-        # TODO: validate length of workload_name?
-        if self.cloud is Cloud.KUBERNETES:
-            if self.oci_resource_name is None:
-                raise ValueError(
-                    "`oci_resource_name` argument is required if `cloud` is `Cloud.KUBERNETES`"
-                )
-        elif self.oci_resource_name is not None:
-            raise ValueError(
-                "`oci_resource_name` argument is only allowed if `cloud` is `Cloud.KUBERNETES`"
-            )
+    # TODO: validate length of workload_name in __post_init__?
 
     @staticmethod
     @abc.abstractmethod
@@ -335,56 +292,6 @@ class CharmSpecific(abc.ABC):
         """
         self.run_pre_refresh_checks_after_1_unit_refreshed()
 
-    def refresh_snap(self, *, snap_name: str, snap_revision: str, refresh: "Refresh") -> None:
-        """Refresh workload snap
-
-        `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
-
-        This method should:
-
-        1. Gracefully stop the workload, if it is running
-        2. Refresh the snap
-        3. Immediately call `refresh.update_snap_revision()`
-
-        Then, this method should attempt to:
-
-        4. Start the workload
-        5. Check if the application and this unit are healthy
-        6. If they are both healthy, set `refresh.next_unit_allowed_to_refresh = True`
-
-        If the snap is not refreshed, this method will be called again on the next Juju event—if
-        this unit is still supposed to be refreshed.
-
-        Note: if this method was run because the user ran the `resume-refresh` action, this method
-        will not be called again even if the snap is not refreshed unless the user runs the action
-        again.
-
-        If the workload is successfully stopped (step #1) but refreshing the snap (step #2) fails
-        (i.e. the snap revision has not changed), consider starting the workload (in the same Juju
-        event). If refreshing the snap fails, retrying in a future Juju event is not recommended
-        since the user may decide to rollback. If the user does not decide to rollback, this method
-        will be called again on the next Juju event—except in the `resume-refresh` action case
-        mentioned above.
-
-        If the snap is successfully refreshed (step #2), this method will not be called again
-        (unless the user runs `juju refresh` to a different snap revision).
-
-        Therefore, if `refresh.next_unit_allowed_to_refresh` is not set to `True` (step #6)
-        (because starting the workload [step #4] failed, checking if the application and this unit
-        were healthy [step #5] failed, either the application or unit was unhealthy in step #5, or
-        the charm code raised an uncaught exception later in the same Juju event), then the charm
-        code should retry steps #4-#6, as applicable, in future Juju events until
-        `refresh.next_unit_allowed_to_refresh` is set to `True` and an uncaught exception is not
-        raised by the charm code later in the same Juju event.
-
-        Also, if step #5 fails or if either the application or this unit is unhealthy, the charm
-        code should set a unit status to indicate what is unhealthy.
-
-        Implementation of this method is required in subclass if `cloud` is `Cloud.MACHINES`
-        """
-        if self.cloud is not Cloud.MACHINES:
-            raise ValueError("`refresh_snap` can only be called if `cloud` is `Cloud.MACHINES`")
-
     @staticmethod
     def _is_charm_version_compatible(*, old: CharmVersion, new: CharmVersion):
         """Check that new charm version is higher than old and that major versions are identical
@@ -438,53 +345,87 @@ class CharmSpecific(abc.ABC):
         return True
 
 
-class PeerRelationNotReady(Exception):
-    """Refresh peer relation is not yet available or not all units have joined yet"""
+@dataclasses.dataclass(eq=False)
+class CharmSpecificKubernetes(CharmSpecificCommon, abc.ABC):
+    """TODO"""
 
+    oci_resource_name: str
+    """Resource name for workload OCI image in metadata.yaml `resources`
 
-class _PeerRelationMissing(PeerRelationNotReady):
-    """Refresh peer relation is not yet available"""
+    (e.g. postgresql-image)
 
-
-class UnitTearingDown(Exception):
-    """This unit is being removed"""
-
-
-def _convert_to_ops_status(status: charm.Status) -> ops.StatusBase:
-    ops_types = {
-        charm.ActiveStatus: ops.ActiveStatus,
-        charm.WaitingStatus: ops.WaitingStatus,
-        charm.MaintenanceStatus: ops.MaintenanceStatus,
-        charm.BlockedStatus: ops.BlockedStatus,
-    }
-    for charm_type, ops_type in ops_types.items():
-        if isinstance(status, charm_type):
-            return ops_type(str(status))
-    raise ValueError(f"Unknown type {repr(type(status).__name__)}: {repr(status)}")
-
-
-def snap_name() -> str:
-    """Get workload snap name
-
-    This function can be used during initial snap installation or during snap removal on teardown.
-
-    When refreshing the snap, the snap name can be read from the `refresh_snap` method's
-    `snap_name` parameter.
-
-    Only applicable if cloud is `Cloud.MACHINES`
+    https://juju.is/docs/sdk/metadata-yaml#heading--resources
     """
-    return _MachinesRefreshVersions().snap_name
+    # TODO: add note about upstream-source for pinning?
+    # TODO: add note about `containers` assumed in metadata.yaml (to find container name)
 
 
-class Refresh:
+@dataclasses.dataclass(eq=False)
+class CharmSpecificMachines(CharmSpecificCommon, abc.ABC):
+    """TODO"""
+
+    @abc.abstractmethod
+    def refresh_snap(
+        self, *, snap_name: str, snap_revision: str, refresh: "Machines"
+    ) -> None:  # TODO type annotation
+        """Refresh workload snap
+
+        `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
+
+        This method should:
+
+        1. Gracefully stop the workload, if it is running
+        2. Refresh the snap
+        3. Immediately call `refresh.update_snap_revision()`
+
+        Then, this method should attempt to:
+
+        4. Start the workload
+        5. Check if the application and this unit are healthy
+        6. If they are both healthy, set `refresh.next_unit_allowed_to_refresh = True`
+
+        If the snap is not refreshed, this method will be called again on the next Juju event—if
+        this unit is still supposed to be refreshed.
+
+        Note: if this method was run because the user ran the `resume-refresh` action, this method
+        will not be called again even if the snap is not refreshed unless the user runs the action
+        again.
+
+        If the workload is successfully stopped (step #1) but refreshing the snap (step #2) fails
+        (i.e. the snap revision has not changed), consider starting the workload (in the same Juju
+        event). If refreshing the snap fails, retrying in a future Juju event is not recommended
+        since the user may decide to rollback. If the user does not decide to rollback, this method
+        will be called again on the next Juju event—except in the `resume-refresh` action case
+        mentioned above.
+
+        If the snap is successfully refreshed (step #2), this method will not be called again
+        (unless the user runs `juju refresh` to a different snap revision).
+
+        Therefore, if `refresh.next_unit_allowed_to_refresh` is not set to `True` (step #6)
+        (because starting the workload [step #4] failed, checking if the application and this unit
+        were healthy [step #5] failed, either the application or unit was unhealthy in step #5, or
+        the charm code raised an uncaught exception later in the same Juju event), then the charm
+        code should retry steps #4-#6, as applicable, in future Juju events until
+        `refresh.next_unit_allowed_to_refresh` is set to `True` and an uncaught exception is not
+        raised by the charm code later in the same Juju event.
+
+        Also, if step #5 fails or if either the application or this unit is unhealthy, the charm
+        code should set a unit status to indicate what is unhealthy.
+        """
+
+
+class Common(abc.ABC):
+    """TODO"""
+
     # TODO: add note about putting at end of charm __init__
 
     @property
+    @abc.abstractmethod
     def in_progress(self) -> bool:
         """Whether a refresh is currently in progress"""
-        return self._refresh.in_progress
 
     @property
+    @abc.abstractmethod
     def next_unit_allowed_to_refresh(self) -> bool:
         """Whether the next unit is allowed to refresh
 
@@ -521,52 +462,18 @@ class Refresh:
         The user can override failing automatic health checks by running the `resume-refresh`
         action with `check-health-of-refreshed-units=false`.
         """
-        return self._refresh.next_unit_allowed_to_refresh
 
     @next_unit_allowed_to_refresh.setter
+    @abc.abstractmethod
     def next_unit_allowed_to_refresh(self, value: typing.Literal[True]):
-        self._refresh.next_unit_allowed_to_refresh = value
-
-    def update_snap_revision(self) -> None:
-        """Must be called immediately after the workload snap is refreshed
-
-        Only applicable if cloud is `Cloud.MACHINES`
-
-        If the charm code raises an uncaught exception in the same Juju event where this method is
-        called, this method does not need to be called again. (That situation will be automatically
-        handled.)
-
-        Resets `next_unit_allowed_to_refresh` to `False`.
-        """
-        if not isinstance(self._refresh, _Machines):
-            raise ValueError(
-                "`update_snap_revision` can only be called if cloud is `Cloud.MACHINES`"
-            )
-        self._refresh.update_snap_revision()
+        pass
 
     @property
-    def pinned_snap_revision(self) -> str:
-        """Workload snap revision pinned by this unit's current charm code
-
-        This attribute should only be read during initial snap installation and should not be read
-        during a refresh.
-
-        During a refresh, the snap revision should be read from the `refresh_snap` method's
-        `snap_revision` parameter.
-
-        Only applicable if cloud is `Cloud.MACHINES`
-        """
-        if not isinstance(self._refresh, _Machines):
-            raise ValueError(
-                "`pinned_snap_revision` can only be accessed if cloud is `Cloud.MACHINES`"
-            )
-        return self._refresh.pinned_snap_revision
-
-    @property
+    @abc.abstractmethod
     def workload_allowed_to_start(self) -> bool:
         """Whether this unit's workload is allowed to start
 
-        Only applicable if cloud is `Cloud.KUBERNETES`
+        Only applicable on Kubernetes (if not on Kubernetes, this attribute will always be `True`)
 
         On Kubernetes, the automatic checks (
 
@@ -604,32 +511,24 @@ class Refresh:
         If the user skips the automatic checks by running the `force-refresh-start` action, the
         value of this attribute will be `True`.
         """
-        if not isinstance(self._refresh, _Kubernetes):
-            return True
-        return self._refresh.workload_allowed_to_start
 
     @property
+    @abc.abstractmethod
     def app_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
         """App status with higher priority than any other app status in the charm
 
         Charm code should ensure that this status is not overridden
         """
-        status = self._refresh.app_status_higher_priority
-        if status:
-            status = _convert_to_ops_status(status)
-        return status
 
     @property
+    @abc.abstractmethod
     def unit_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
         """Unit status with higher priority than any other unit status in the charm
 
         Charm code should ensure that this status is not overridden
         """
-        status = self._refresh.unit_status_higher_priority
-        if status:
-            status = _convert_to_ops_status(status)
-        return status
 
+    @abc.abstractmethod
     def unit_status_lower_priority(
         self, *, workload_is_running: bool = True
     ) -> typing.Optional[ops.StatusBase]:
@@ -639,31 +538,47 @@ class Refresh:
         no other unit status with a message to display.
         """
         # TODO: note about set status on every Juju event? or up to charm?
-        status = self._refresh.unit_status_lower_priority(workload_is_running=workload_is_running)
-        if status:
-            status = _convert_to_ops_status(status)
-        return status
 
-    def __init__(self, charm_specific: CharmSpecific, /):
-        if charm_specific.cloud is Cloud.KUBERNETES:
-            self._refresh = _Kubernetes(charm_specific)
-        elif charm_specific.cloud is Cloud.MACHINES:
-            self._refresh = _Machines(charm_specific, refresh=self)
-        else:
-            raise TypeError
+    @abc.abstractmethod
+    def __init__(self, charm_specific: CharmSpecificCommon, /):
+        pass
 
 
-_LOCAL_STATE = pathlib.Path(".charm_refresh_v3")
-"""Local state for this unit
+class PeerRelationNotReady(Exception):
+    """Refresh peer relation is not yet available or not all units have joined yet"""
 
-On Kubernetes, deleted when pod is deleted
-This directory is stored in /var/lib/juju/ on the charm container
-(e.g. in /var/lib/juju/agents/unit-postgresql-k8s-0/charm/)
-As of Juju 3.5.3, /var/lib/juju/ is stored in a Kubernetes emptyDir volume
-https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
-This means that it will not be deleted on container restart—it will only be deleted if the pod is
-deleted
-"""
+
+class _PeerRelationMissing(PeerRelationNotReady):
+    """Refresh peer relation is not yet available"""
+
+
+class UnitTearingDown(Exception):
+    """This unit is being removed"""
+
+
+class KubernetesJujuAppNotTrusted(Exception):
+    """Juju app is not trusted (needed to patch StatefulSet partition)
+
+    User must run `juju trust` with `--scope=cluster`
+    or re-deploy using `juju deploy` with `--trust`
+    """
+
+
+def _convert_to_ops_status(
+    status: typing.Optional[charm.Status],
+) -> typing.Optional[ops.StatusBase]:
+    if status is None:
+        return None
+    ops_types = {
+        charm.ActiveStatus: ops.ActiveStatus,
+        charm.WaitingStatus: ops.WaitingStatus,
+        charm.MaintenanceStatus: ops.MaintenanceStatus,
+        charm.BlockedStatus: ops.BlockedStatus,
+    }
+    for charm_type, ops_type in ops_types.items():
+        if isinstance(status, charm_type):
+            return ops_type(str(status))
+    raise ValueError(f"Unknown type {repr(type(status).__name__)}: {repr(status)}")
 
 
 @functools.total_ordering
@@ -724,6 +639,31 @@ class _MachinesRefreshVersions(_RefreshVersions):
             # TODO link to docs with format?
             raise KeyError(f"Snap revision missing for architecture {repr(platform.machine())}")
 
+
+def snap_name() -> str:
+    """Get workload snap name
+
+    This function can be used during initial snap installation or during snap removal on teardown.
+
+    When refreshing the snap, the snap name can be read from the `refresh_snap` method's
+    `snap_name` parameter.
+
+    Only applicable on machines
+    """
+    return _MachinesRefreshVersions().snap_name
+
+
+_LOCAL_STATE = pathlib.Path(".charm_refresh_v3")
+"""Local state for this unit
+
+On Kubernetes, deleted when pod is deleted
+This directory is stored in /var/lib/juju/ on the charm container
+(e.g. in /var/lib/juju/agents/unit-postgresql-k8s-0/charm/)
+As of Juju 3.5.3, /var/lib/juju/ is stored in a Kubernetes emptyDir volume
+https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
+This means that it will not be deleted on container restart—it will only be deleted if the pod is
+deleted
+"""
 
 _dot_juju_charm = pathlib.Path(".juju-charm")
 
@@ -853,20 +793,16 @@ class _KubernetesUnit(charm.Unit):
         )
 
 
-class KubernetesJujuAppNotTrusted(Exception):
-    """Juju app is not trusted (needed to patch StatefulSet partition)
+class Kubernetes(Common):
+    """TODO"""
 
-    User must run `juju trust` with `--scope=cluster`
-    or re-deploy using `juju deploy` with `--trust`
-    """
-
-
-class _Kubernetes:
-    @property
+    # Use `@Common.in_progress.getter` instead of `@property` to preserve docstring from parent
+    # class
+    @Common.in_progress.getter
     def in_progress(self) -> bool:
         return self._in_progress
 
-    @property
+    @Common.next_unit_allowed_to_refresh.getter
     def next_unit_allowed_to_refresh(self) -> bool:
         return (
             self._relation.my_unit.get(
@@ -878,6 +814,8 @@ class _Kubernetes:
             == self._unit_controller_revision
         )
 
+    # Do not use `@Common.next_unit_allowed_to_refresh.setter` so that the getter defined in this
+    # class is not overridden
     @next_unit_allowed_to_refresh.setter
     def next_unit_allowed_to_refresh(self, value: typing.Literal[True]):
         if value is not True:
@@ -903,7 +841,7 @@ class _Kubernetes:
             ] = self._unit_controller_revision
             self._set_partition_and_app_status(handle_action=False)
 
-    @property
+    @Common.workload_allowed_to_start.getter
     def workload_allowed_to_start(self) -> bool:
         if not self._in_progress:
             return True
@@ -930,19 +868,19 @@ class _Kubernetes:
             return True
         return False
 
-    @property
-    def app_status_higher_priority(self) -> typing.Optional[charm.Status]:
-        return self._app_status_higher_priority
+    @Common.app_status_higher_priority.getter
+    def app_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
+        return _convert_to_ops_status(self._app_status_higher_priority)
 
-    @property
-    def unit_status_higher_priority(self) -> typing.Optional[charm.Status]:
-        return self._unit_status_higher_priority
+    @Common.unit_status_higher_priority.getter
+    def unit_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
+        return _convert_to_ops_status(self._unit_status_higher_priority)
 
     def unit_status_lower_priority(
-        self, *, workload_is_running: bool
-    ) -> typing.Optional[charm.Status]:
+        self, *, workload_is_running: bool = True
+    ) -> typing.Optional[ops.StatusBase]:
         if not self._in_progress:
-            return
+            return None
         workload_container_matches_pin = (
             self._installed_workload_container_version == self._pinned_workload_container_version
         )
@@ -974,8 +912,8 @@ class _Kubernetes:
                 # by a Kubernetes ImagePullBackOff error
                 message += "; Unable to check container"
         if workload_is_running:
-            return charm.ActiveStatus(message)
-        return charm.WaitingStatus(message)
+            return ops.ActiveStatus(message)
+        return ops.WaitingStatus(message)
 
     @staticmethod
     def _get_partition() -> int:
@@ -1627,8 +1565,11 @@ class _Kubernetes:
         assert self._app_status_higher_priority is not None
         charm.app_status = self._app_status_higher_priority
 
-    def __init__(self, charm_specific: CharmSpecific, /):
-        assert charm_specific.cloud is Cloud.KUBERNETES
+    def __init__(self, charm_specific: CharmSpecificKubernetes, /):
+        if not isinstance(charm_specific, CharmSpecificKubernetes):
+            raise TypeError(
+                f"expected type 'CharmSpecificKubernetes', got {repr(type(charm_specific).__name__)}"
+            )
         self._charm_specific = charm_specific
 
         _LOCAL_STATE.mkdir(exist_ok=True)
@@ -2185,8 +2126,10 @@ class _MachinesDatabagUpToDate(enum.Enum):
         raise TypeError
 
 
-class _Machines:
-    @property
+class Machines(Common):
+    """TODO"""
+
+    @Common.in_progress.getter
     def in_progress(self) -> bool:
         if self._refresh_completed_this_event and len(self._relation.all_units) > 1:
             # TODO comment: shouldn't run non-refresh stuff on this event in case uncaught exception causes databag state (that tells other units refresh completed) to not get propgated to databag. wait till next event where databag changes committed. note about how other units will trigger event on this unit
@@ -2202,7 +2145,7 @@ class _Machines:
         else:
             raise TypeError
 
-    @property
+    @Common.next_unit_allowed_to_refresh.getter
     def next_unit_allowed_to_refresh(self) -> bool:
         return (
             self._relation.my_unit.get(
@@ -2228,26 +2171,46 @@ class _Machines:
             "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date"
         ] = True
 
-    def update_snap_revision(self):
+    @Common.workload_allowed_to_start.getter
+    def workload_allowed_to_start(self) -> bool:
+        return True
+
+    def update_snap_revision(self) -> None:
+        """Must be called immediately after the workload snap is refreshed
+
+        If the charm code raises an uncaught exception in the same Juju event where this method is
+        called, this method does not need to be called again. (That situation will be automatically
+        handled.)
+
+        Resets `next_unit_allowed_to_refresh` to `False`.
+        """
         self._update_snap_revision(raise_if_not_installed=True)
 
     @property
     def pinned_snap_revision(self) -> str:
+        """Workload snap revision pinned by this unit's current charm code
+
+        This attribute should only be read during initial snap installation and should not be read
+        during a refresh.
+
+        During a refresh, the snap revision should be read from the `refresh_snap` method's
+        `snap_revision` parameter.
+        """
         return self._pinned_workload_container_version
 
-    @property
-    def app_status_higher_priority(self) -> typing.Optional[charm.Status]:
-        return self._app_status_higher_priority
+    @Common.app_status_higher_priority.getter
+    def app_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
+        return _convert_to_ops_status(self._app_status_higher_priority)
 
-    @property
-    def unit_status_higher_priority(self) -> typing.Optional[charm.Status]:
-        return self._unit_status_higher_priority
+    @Common.unit_status_higher_priority.getter
+    def unit_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
+        return _convert_to_ops_status(self._unit_status_higher_priority)
 
     def unit_status_lower_priority(
-        self, *, workload_is_running: bool
-    ) -> typing.Optional[charm.Status]:
+        self, *, workload_is_running: bool = True
+    ) -> typing.Optional[ops.StatusBase]:
         if self._in_progress is _MachinesInProgress.FALSE:
-            return
+            return None
         message = (
             f"{self._charm_specific.workload_name} {self._installed_workload_version.read_text()}"
         )
@@ -2263,8 +2226,8 @@ class _Machines:
             # Charmhub revision is not available; fall back to charm version
             message += f"; Charm version {self._installed_charm_version}"
         if workload_is_running:
-            return charm.ActiveStatus(message)
-        return charm.WaitingStatus(message)
+            return ops.ActiveStatus(message)
+        return ops.WaitingStatus(message)
 
     def _get_installed_snap_revision(self) -> typing.Optional[str]:
         # TODO docs: snap name cannot change on refresh
@@ -2279,7 +2242,7 @@ class _Machines:
         snaps = data["result"]
         if not snaps:
             # Snap not installed
-            return
+            return None
         assert len(snaps) == 1
         revision = snaps[0]["revision"]
         assert isinstance(revision, str)
@@ -2771,7 +2734,7 @@ class _Machines:
             self._charm_specific.refresh_snap(
                 snap_name=self._workload_snap_name,
                 snap_revision=self._pinned_workload_container_version,
-                refresh=self._refresh,
+                refresh=self,
             )
             action.result = {"result": f"Refreshed unit {charm.unit.number}"}
             return
@@ -2864,7 +2827,7 @@ class _Machines:
         self._charm_specific.refresh_snap(
             snap_name=self._workload_snap_name,
             snap_revision=self._pinned_workload_container_version,
-            refresh=self._refresh,
+            refresh=self,
         )
         if action:
             if self._pause_after is _PauseAfter.FIRST:
@@ -2876,10 +2839,12 @@ class _Machines:
         if self._force_start is not None:
             self._force_start.log(f"Refreshed unit {charm.unit.number}")
 
-    def __init__(self, charm_specific: CharmSpecific, /, *, refresh: Refresh):
-        assert charm_specific.cloud is Cloud.MACHINES
+    def __init__(self, charm_specific: CharmSpecificMachines, /):
+        if not isinstance(charm_specific, CharmSpecificMachines):
+            raise TypeError(
+                f"expected type 'CharmSpecificMachines', got {repr(type(charm_specific).__name__)}"
+            )
         self._charm_specific = charm_specific
-        self._refresh = refresh
 
         _LOCAL_STATE.mkdir(exist_ok=True)
         # Save state if this unit is tearing down.
@@ -3319,12 +3284,15 @@ class _Machines:
 
         # todo comment app status set ignoring resume refresh (so same ux when resume-refresh ran on non-leader)
         self._set_app_status()  # TODO comment for long running snap refresh
+        # Set in case `refresh.in_progress` accessed in `self._charm_specific.refresh_snap()`
+        self._refresh_completed_this_event = False
+        """Whether this app's refresh completed during this Juju event"""
+
         self._refresh_unit()
         # Update `self._in_progress` and app status after possible snap refresh
         old_in_progress = self._in_progress
         self._in_progress = self._determine_in_progress()
         self._refresh_completed_this_event = old_in_progress is False and self._in_progress is True
-        """Whether this app's refresh completed during this Juju event"""
         self._set_app_status()
 
         if self._in_progress is _MachinesInProgress.FALSE:

@@ -2802,10 +2802,9 @@ class Machines(Common):
             return
 
         if (
-            self._pause_after is _PauseAfter.UNKNOWN
-            or self._pause_after is _PauseAfter.ALL
-            or (self._pause_after is _PauseAfter.FIRST and self._units.index(charm.unit) == 1)
-        ):
+            (self._pause_after is _PauseAfter.UNKNOWN or self._pause_after is _PauseAfter.ALL)
+            and self._units.index(charm.unit) != 0
+        ) or (self._pause_after is _PauseAfter.FIRST and self._units.index(charm.unit) == 1):
             # resume-refresh action required to refresh this unit
 
             if not action:

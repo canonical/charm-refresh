@@ -1192,7 +1192,7 @@ class Kubernetes(Common):
             ):
                 if force_start:
                     force_start.log(
-                        f"Checked that refresh is to {self._charm_specific.workload_name}"
+                        f"Checked that refresh is to {self._charm_specific.workload_name} "
                         "container version that has been validated to work with the charm revision"
                     )
             else:
@@ -1856,7 +1856,7 @@ class Kubernetes(Common):
             self._pinned_workload_container_version = digest
             """Workload image digest pinned by this unit's charm code
 
-            (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6)"
+            (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
             """
         workload_containers: typing.List[str] = [
             key
@@ -2473,7 +2473,7 @@ class Machines(Common):
 
         # Log workload & charm versions we're refreshing from & to
         from_to_message = (
-            f"from {self._charm_specific.workload_name} {original_versions.workload} (snap"
+            f"from {self._charm_specific.workload_name} {original_versions.workload} (snap "
             f"revision {original_versions.workload_container}) and charm "
         )
         if original_versions.charm_revision_raw.charmhub_revision:
@@ -2522,7 +2522,7 @@ class Machines(Common):
             if True:
                 if force_start:
                     force_start.log(
-                        f"Checked that refresh is to {self._charm_specific.workload_name}"
+                        f"Checked that refresh is to {self._charm_specific.workload_name} "
                         "container version that has been validated to work with the charm revision"
                     )
             else:

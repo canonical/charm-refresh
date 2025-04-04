@@ -2683,8 +2683,8 @@ class Machines(Common):
         ):
             self._app_status_higher_priority = charm.BlockedStatus(
                 "Refreshing. Check units "
-                f">={self._units[max(next_unit_to_refresh_index - 1, 0)].number} are healthy & run"
-                f"`resume-refresh` on unit {next_unit_to_refresh.number}. To rollback, `juju "
+                f">={self._units[max(next_unit_to_refresh_index - 1, 0)].number} are healthy & "
+                f"run `resume-refresh` on unit {next_unit_to_refresh.number}. To rollback, `juju "
                 f"refresh --revision {original_versions.charm_revision_raw.charmhub_revision}`"
             )
             charm.app_status = self._app_status_higher_priority

@@ -2837,7 +2837,7 @@ class Machines(Common):
             else:
                 action.result = {"result": f"Refreshed unit {charm.unit.number}"}
         if self._force_start is not None:
-            self._force_start.log(f"Refreshed unit {charm.unit.number}")
+            self._force_start.result = {"result": f"Refreshed unit {charm.unit.number}"}
 
     def __init__(self, charm_specific: CharmSpecificMachines, /):
         if not isinstance(charm_specific, CharmSpecificMachines):

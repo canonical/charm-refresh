@@ -2630,7 +2630,7 @@ class Machines(Common):
             return
         assert self._in_progress is _MachinesInProgress.TRUE
         original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
-        if not self._charm_specific.is_compatible(
+        if not self._refresh_started and not self._charm_specific.is_compatible(
             old_charm_version=original_versions.charm,
             new_charm_version=self._installed_charm_version,
             # `original_versions.workload` is not `None` since

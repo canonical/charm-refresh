@@ -2662,6 +2662,14 @@ class Machines(Common):
             )
             return
 
+        if len(self._units) == 1:
+            self._app_status_higher_priority = charm.MaintenanceStatus(
+                "Refreshing. To rollback, `juju refresh --revision "
+                f"{original_versions.charm_revision_raw.charmhub_revision}`"
+            )
+            charm.app_status = self._app_status_higher_priority
+            return
+
         for index, unit in enumerate(self._units):
             databag = self._relation[unit]
             if databag.get("installed_snap_revision") != self._pinned_workload_container_version:

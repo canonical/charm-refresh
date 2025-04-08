@@ -3289,13 +3289,17 @@ class Machines(Common):
         self._set_app_status()  # TODO comment for long running snap refresh
         # Set in case `refresh.in_progress` accessed in `self._charm_specific.refresh_snap()`
         self._refresh_completed_this_event = False
-        """Whether this app's refresh completed during this Juju event"""
+        """Whether this app's refresh completed during this Juju event"""  # TODO add purpose to docstring & specify case its limited to (snap refresh that completes)
 
         self._refresh_unit()
         # Update `self._in_progress` and app status after possible snap refresh
         old_in_progress = self._in_progress
         self._in_progress = self._determine_in_progress()
-        self._refresh_completed_this_event = old_in_progress is False and self._in_progress is True
+        self._refresh_completed_this_event = (
+            old_in_progress
+            is _MachinesInProgress.TRUE  # TODO comment explain must be true if snap refreshed this event, will not be unknown
+            and self._in_progress is _MachinesInProgress.FALSE
+        )
         self._set_app_status()
 
         if self._in_progress is _MachinesInProgress.FALSE:

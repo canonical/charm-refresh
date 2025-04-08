@@ -365,9 +365,7 @@ class CharmSpecificMachines(CharmSpecificCommon, abc.ABC):
     """TODO"""
 
     @abc.abstractmethod
-    def refresh_snap(
-        self, *, snap_name: str, snap_revision: str, refresh: "Machines"
-    ) -> None:
+    def refresh_snap(self, *, snap_name: str, snap_revision: str, refresh: "Machines") -> None:
         """Refresh workload snap
 
         `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
@@ -705,7 +703,7 @@ class _OriginalVersions:
     """Original workload image digest
 
     (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
-    """ # TODO machines example snap rev
+    """  # TODO machines example snap rev
     installed_workload_container_matched_pinned_container: bool
     """Whether original workload container matched container pinned in original charm code"""
     charm: CharmVersion
@@ -1239,7 +1237,7 @@ class Kubernetes(Common):
                 and self._installed_workload_container_version
                 == self._pinned_workload_container_version
                 # Original & current workload containers match(ed) pinned containers
-
+                #
                 and self._charm_specific.is_compatible(
                     old_charm_version=original_versions.charm,
                     new_charm_version=self._installed_charm_version,
@@ -2134,7 +2132,6 @@ class Machines(Common):
     def in_progress(self) -> bool:
         if self._refresh_completed_this_event and len(self._relation.all_units) > 1:
             # TODO comment: shouldn't run non-refresh stuff on this event in case uncaught exception causes databag state (that tells other units refresh completed) to not get propgated to databag. wait till next event where databag changes committed. note about how other units will trigger event on this unit
-            # TODO: single unit case?
             return True
         if (
             self._in_progress is _MachinesInProgress.TRUE
@@ -2294,14 +2291,6 @@ class Machines(Common):
             < other_unit_last_refresh.time_of_refresh
         ):
             return _MachinesDatabagUpToDate.TRUE
-        elif (
-            self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
-            != _dot_juju_charm_modified_time()
-        ):
-            # TODO comment This unit's charm code might not be latest
-            # TODO check if adding this check causes issues
-            # TODO remove redundant check for this elsewhere?
-            return _MachinesDatabagUpToDate.UNKNOWN
         else:
             return _MachinesDatabagUpToDate.FALSE
 
@@ -2345,7 +2334,7 @@ class Machines(Common):
             if installed_snap_revision is None:
                 # This is initial installation or `unit` is a new unit that was added during scale
                 # up
-                # TODO: issues with this unit on remove event? check this unit separately?
+                # TODO comment could also be None on remove event but this code will not run because UnitTearingDown will be raised
                 continue
             if installed_snap_revision != self._pinned_workload_container_version:
                 return _MachinesInProgress.TRUE
@@ -2439,11 +2428,15 @@ class Machines(Common):
         original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
         if not self._refresh_started:
             # Check if this unit is rolling back
-            if (
-                original_versions.charm == self._installed_charm_version
-                # TODO remove workload check? if charm is eq it should be fine
-                and original_versions.workload_container == self._pinned_workload_container_version
-            ):
+            if original_versions.charm == self._installed_charm_version:
+                # On machines, the user is not able to specify a snap revision that is different
+                # from the snap revision pinned in the charm code.
+                # In the future, if snap resources are added to Juju (similar to Kubernetes OCI
+                # resources), this will change.
+                assert (
+                    original_versions.workload_container == self._pinned_workload_container_version
+                )
+
                 # Rollback to original charm code & workload container version; skip checks
 
                 workload_version = (

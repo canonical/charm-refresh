@@ -700,10 +700,11 @@ class _OriginalVersions:
     `None` if `installed_workload_container_matched_pinned_container` is `False`
     """
     workload_container: str
-    """Original workload image digest
+    """Original workload image digest (Kubernetes) or snap revision (machines)
 
-    (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
-    """  # TODO machines example snap rev
+    (Kubernetes example: "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
+    (machines example: "20001")
+    """
     installed_workload_container_matched_pinned_container: bool
     """Whether original workload container matched container pinned in original charm code"""
     charm: CharmVersion

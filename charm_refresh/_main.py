@@ -367,7 +367,7 @@ class CharmSpecificMachines(CharmSpecificCommon, abc.ABC):
     @abc.abstractmethod
     def refresh_snap(
         self, *, snap_name: str, snap_revision: str, refresh: "Machines"
-    ) -> None:  # TODO type annotation
+    ) -> None:
         """Refresh workload snap
 
         `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
@@ -559,8 +559,8 @@ class UnitTearingDown(Exception):
 class KubernetesJujuAppNotTrusted(Exception):
     """Juju app is not trusted (needed to patch StatefulSet partition)
 
-    User must run `juju trust` with `--scope=cluster`
-    or re-deploy using `juju deploy` with `--trust`
+    User must run `juju trust` with `--scope=cluster` or re-deploy using `juju deploy` with
+    `--trust`
     """
 
 
@@ -595,7 +595,7 @@ class _PauseAfter(str, enum.Enum):
         return cls.UNKNOWN
 
     def __gt__(self, other):
-        if not isinstance(other, type(self)):
+        if not isinstance(other, _PauseAfter):
             # Raise instead of `return NotImplemented` since this class inherits from `str`
             raise TypeError
         priorities = {self.NONE: 0, self.FIRST: 1, self.ALL: 2, self.UNKNOWN: 3}
@@ -705,7 +705,7 @@ class _OriginalVersions:
     """Original workload image digest
 
     (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
-    """
+    """ # TODO machines example snap rev
     installed_workload_container_matched_pinned_container: bool
     """Whether original workload container matched container pinned in original charm code"""
     charm: CharmVersion
@@ -917,7 +917,7 @@ class Kubernetes(Common):
 
     @staticmethod
     def _get_partition() -> int:
-        """Kubernetes StatefulSet rollingUpdate partition
+        """Get Kubernetes StatefulSet rollingUpdate partition
 
         Specifies which units can refresh
 
@@ -941,7 +941,7 @@ class Kubernetes(Common):
 
     @staticmethod
     def _set_partition(value: int, /):
-        """Kubernetes StatefulSet rollingUpdate partition
+        """Set Kubernetes StatefulSet rollingUpdate partition
 
         Specifies which units can refresh
 
@@ -993,7 +993,7 @@ class Kubernetes(Common):
         Sets `self._unit_status_higher_priority` & unit status. Unit status only set if
         `self._unit_status_higher_priority` (unit status is not cleared if
         `self._unit_status_higher_priority` is `None`—that is the responsibility of the charm)
-        """  # TODO actually set unit status
+        """
 
         class _InvalidForceEvent(ValueError):
             """Event is not valid force-refresh-start action event"""
@@ -1239,6 +1239,7 @@ class Kubernetes(Common):
                 and self._installed_workload_container_version
                 == self._pinned_workload_container_version
                 # Original & current workload containers match(ed) pinned containers
+
                 and self._charm_specific.is_compatible(
                     old_charm_version=original_versions.charm,
                     new_charm_version=self._installed_charm_version,
@@ -2560,6 +2561,7 @@ class Machines(Common):
                     f"({repr(original_versions.charm)})"
                 )
                 # The leader unit will set app status to show that refresh is incompatible
+
                 if force_start:
                     force_start.fail("Refresh incompatible. Rollback with `juju refresh`")
                 return

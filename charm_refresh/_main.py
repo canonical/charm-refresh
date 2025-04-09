@@ -1978,14 +1978,13 @@ class Kubernetes(Common):
                         self._installed_workload_container_version
                         == self._pinned_workload_container_version
                     )
-                    self._original_versions = _OriginalVersions(
+                    _OriginalVersions(
                         workload=self._pinned_workload_version if matches_pin else None,
                         workload_container=self._installed_workload_container_version,
                         installed_workload_container_matched_pinned_container=matches_pin,
                         charm=self._installed_charm_version,
                         charm_revision_raw=self._installed_charm_revision_raw,
-                    )
-                    self._original_versions.write_to_app_databag(self._relation.my_app_rw)
+                    ).write_to_app_databag(self._relation.my_app_rw)
                 else:
                     logger.info(
                         "This unit's workload container digest is not available from the "
@@ -3313,11 +3312,10 @@ class Machines(Common):
             # Whether this unit is leader
             if self._relation.my_app_rw is not None:
                 # Save versions in app databag for next refresh
-                self._original_versions = _OriginalVersions(
+                _OriginalVersions(
                     workload=self._pinned_workload_version,
                     workload_container=self._pinned_workload_container_version,
                     installed_workload_container_matched_pinned_container=True,
                     charm=self._installed_charm_version,
                     charm_revision_raw=self._installed_charm_revision_raw,
-                )
-                self._original_versions.write_to_app_databag(self._relation.my_app_rw)
+                ).write_to_app_databag(self._relation.my_app_rw)

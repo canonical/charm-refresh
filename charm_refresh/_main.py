@@ -2105,7 +2105,17 @@ class _CharmCodeRefreshHistory:
 
 
 class _MachinesInProgress(enum.Enum):
-    # TODO docstring; uses snap
+    """Whether a refresh is currently in progress
+
+    If any unit's snap revision does not match the snap revision pinned in this unit's charm code,
+    a refresh is in progress.
+
+    Otherwise, a refresh is not in progress.
+
+    Sometimes, it is not possible to determine if a refresh is in progress.
+    See `Machines._determine_in_progress()`
+    """
+
     FALSE = 0
     TRUE = 1
     UNKNOWN = 2
@@ -2130,9 +2140,21 @@ class Machines(Common):
 
     @Common.in_progress.getter
     def in_progress(self) -> bool:
+        # If the refresh completed during this Juju event, tell the charm code that the refresh is
+        # still in progress.
+        # This avoids a situation where, because the charm code sees that the refresh is no longer
+        # in progress, the charm code runs an operation that raises an uncaught exception. If that
+        # happens, changes to this unit's databag will not be persisted and—from the perspective of
+        # other units—a refresh will still be in progress.
+        # Wait until the changes to this unit's databag have been saved (i.e. wait until the next
+        # Juju event) before telling the charm code that a refresh is no longer in progress.
+        # When other units see that the refresh has completed, they will trigger a Juju event on
+        # this unit.
+        # For single unit deployments, there are no other units to ensure another Juju event is
+        # triggered on this unit (and the aforementioned situation is not a concern).
         if self._refresh_completed_this_event and len(self._relation.all_units) > 1:
-            # TODO comment: shouldn't run non-refresh stuff on this event in case uncaught exception causes databag state (that tells other units refresh completed) to not get propgated to databag. wait till next event where databag changes committed. note about how other units will trigger event on this unit
             return True
+
         if (
             self._in_progress is _MachinesInProgress.TRUE
             or self._in_progress is _MachinesInProgress.UNKNOWN
@@ -2247,6 +2269,16 @@ class Machines(Common):
         return revision
 
     def _update_snap_revision(self, *, raise_if_not_installed: bool):
+        """Update snap revision in this unit's databag
+
+        If the installed snap revision does not match the snap revision in this unit's databag:
+
+        - reset
+          "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date" in
+          this unit's databag to `False`
+        - update "installed_snap_revision" in this unit's databag
+        - update `self._installed_workload_version`
+        """
         snap_revision = self._get_installed_snap_revision()
         if snap_revision is None and raise_if_not_installed:
             # TODO improve message? snap name
@@ -2319,14 +2351,25 @@ class Machines(Common):
     def _determine_in_progress(self) -> _MachinesInProgress:
         """Determine whether a refresh is currently in progress
 
-        TODO snap only
-        TODO charm only refresh
-        TODO charm only refresh after snap refresh
+        If any unit's snap revision does not match the snap revision pinned in this unit's charm
+        code, a refresh is in progress.
 
-        TODO when unknown
+        Otherwise, a refresh is not in progress.
 
-        TODO mention not same as what's reported by api on last unit to refresh?
-        TODO mention from this unit's perspective?
+        Sometimes, it is not possible to determine if a refresh is in progress. If a unit has an
+        outdated databag, it is not possible to confirm which snap revision is installed on that
+        unit.
+
+        For a charm-code-only refresh (i.e. the snap revision pinned in the charm code is identical
+        for both charm code versions), a refresh is never in progress. However, for a few Juju
+        events, it is not possible to determine if a refresh is in progress.
+
+        If the user performs a charm-code-only refresh while a refresh is in progress (i.e. while
+        any unit has a snap revision that does not match the pinned snap revision), the refresh
+        will remain in progress.
+
+        NOTE: If `self._refresh_completed_this_event is True`, `self.in_progress` may be `True`
+        while this method returns `_MachinesInProgress.FALSE`
         """
         unknown = False
         for unit, databag in self._relation.all_units.items():
@@ -2334,7 +2377,9 @@ class Machines(Common):
             if installed_snap_revision is None:
                 # This is initial installation or `unit` is a new unit that was added during scale
                 # up
-                # TODO comment could also be None on remove event but this code will not run because UnitTearingDown will be raised
+                # (For this unit's databag, `installed_snap_revision` could also be `None` if this
+                # unit is tearing down. However, in that case, this code will not run since
+                # `UnitTearingDown` will be raised earlier.)
                 continue
             if installed_snap_revision != self._pinned_workload_container_version:
                 return _MachinesInProgress.TRUE
@@ -2354,6 +2399,36 @@ class Machines(Common):
             return _MachinesInProgress.FALSE
 
     def _start_refresh(self):
+        """Run automatic checks after `juju refresh` on highest unit
+
+        Automatic checks include:
+
+        - workload container check
+        - compatibility checks
+        - pre-refresh checks
+
+        Handles force-refresh-start action
+
+        If this unit is the highest number unit, this unit's charm code is up-to-date, and the
+        refresh to `self._pinned_workload_container_version` has not already started, this method
+        will check for one of the following conditions:
+
+        - this unit is rolling back
+        - run all the automatic checks & check that all were successful
+        - run the automatic checks (if any) that were not skipped by the force-refresh-start action
+          and check that they were successful
+
+        If one of those conditions is met, this method will set `self._refresh_started = True`, set
+        "refresh_started_if_this_units_databag_is_up_to_date" to `True` in this unit's databag, and
+        will touch `self._refresh_started_local_state`
+
+        Sets `self._force_start`
+
+        Sets `self._unit_status_higher_priority` & unit status. Unit status only set if
+        `self._unit_status_higher_priority` (unit status is not cleared if
+        `self._unit_status_higher_priority` is `None`—that is the responsibility of the charm)
+        """
+
         class _InvalidForceEvent(ValueError):
             """Event is not valid force-refresh-start action event"""
 
@@ -2401,8 +2476,8 @@ class Machines(Common):
                     )
                     raise _InvalidForceEvent
 
-        # TODO docstring: `self._force_start` used to report status on snap refresh if force valid
         self._force_start: typing.Optional[_ForceRefreshStartAction] = None
+        """Used to log snap refresh to action output if snap refresh caused by force-refresh-start action"""
         force_start: typing.Optional[_ForceRefreshStartAction]
         try:
             force_start = _ForceRefreshStartAction(
@@ -2595,7 +2670,6 @@ class Machines(Common):
         self._refresh_started = True
         self._relation.my_unit["refresh_started_if_this_units_databag_is_up_to_date"] = True
         self._refresh_started_local_state.touch()
-        # TODO comment force start result
         self._force_start = force_start
 
     def _set_app_status(self):
@@ -2699,7 +2773,11 @@ class Machines(Common):
         charm.app_status = self._app_status_higher_priority
 
     def _refresh_unit(self):
-        # TODO docstring handle resume-refresh and refresh unit's snap
+        """Refresh this unit's snap, if allowed
+
+        Handles resume-refresh action
+        """
+
         class _ResumeRefreshAction(charm.ActionEvent):
             def __init__(self, event: charm.ActionEvent, /):
                 super().__init__()
@@ -2766,7 +2844,8 @@ class Machines(Common):
             action.fail(
                 "`pause_after_unit_refresh` config is set to `none`. This action is not applicable."
             )
-            action = None  # todo comment
+            # Do not log any additional information to action output
+            action = None
 
         if not self._refresh_started:
             if action:
@@ -2814,9 +2893,13 @@ class Machines(Common):
                 return
         else:
             if action:
-                # TODO comment—this unit would've refreshed without action, fail action to improve user's mental model
+                # This unit would have refreshed even if the resume-refresh action was not run
+                # Fail the action so that the user does not mistakenly believe that running the
+                # action caused this unit to refresh—so that the user's mental model of how the
+                # refresh works is more accurate.
                 action.fail("Unit currently refreshing")  # TODO UX
-                action = None  # TODO comment
+                # Do not log any additional information to action output
+                action = None
 
         assert self._get_installed_snap_revision() != self._pinned_workload_container_version
         if action:
@@ -2938,11 +3021,11 @@ class Machines(Common):
         #    To mitigate this issue, we only store the timestamp on refresh if we know that the
         #    refresh was to the up-to-date charm code version.
         self._history = _CharmCodeRefreshHistory.from_file()
-        # NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be out
-        # of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
-        # `None`
-        # TODO docstring?
         self._refresh_started_local_state = _LOCAL_STATE / "machines_refresh_started"
+        """NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be
+        out of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
+        `None`
+        """
         if (
             self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
             != _dot_juju_charm_modified_time()
@@ -3011,7 +3094,7 @@ class Machines(Common):
 
         self._refresh_started = self._refresh_started_local_state.exists()
         """Whether this app has started to refresh to the snap revision pinned in this unit's charm code
-        
+
         `True` if this app is rolling back, if automatic checks have succeeded, or if the user
         successfully forced the refresh to start with the force-refresh-start action
         `False` otherwise
@@ -3024,7 +3107,7 @@ class Machines(Common):
 
         If the user runs `juju refresh` while a refresh is in progress, this will be reset to
         `False` unless the `juju refresh` is a rollback
-        
+
         NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be out
         of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
         `None`
@@ -3284,28 +3367,46 @@ class Machines(Common):
         self._start_refresh()
         self._pause_after = _PauseAfter(charm.config["pause_after_unit_refresh"])
 
-        # todo comment app status set ignoring resume refresh (so same ux when resume-refresh ran on non-leader)
-        self._set_app_status()  # TODO comment for long running snap refresh
+        # Set app status before potential snap refresh since snap refresh may take a long time
+        # Ignore resume-refresh action when setting app status so that the app status UX is the
+        # same when resume-refresh is run on the leader or a non-leader unit
+        self._set_app_status()
         # Set in case `refresh.in_progress` accessed in `self._charm_specific.refresh_snap()`
         self._refresh_completed_this_event = False
-        """Whether this app's refresh completed during this Juju event"""  # TODO add purpose to docstring & specify case its limited to (snap refresh that completes)
+        """Whether this app's refresh completed during this Juju event
+
+        Only `True` if this unit's snap was refreshed during this Juju event and this app's refresh
+        is now complete
+
+        Used to avoid situation where, because the charm code sees that the refresh is no longer
+        in progress, the charm code runs an operation that raises an uncaught exception. If that
+        happens, changes to this unit's databag will not be persisted and—from the perspective of
+        other units—a refresh will still be in progress.
+        """
 
         self._refresh_unit()
         # Update `self._in_progress` and app status after possible snap refresh
         old_in_progress = self._in_progress
         self._in_progress = self._determine_in_progress()
         self._refresh_completed_this_event = (
-            old_in_progress
-            is _MachinesInProgress.TRUE  # TODO comment explain must be true if snap refreshed this event, will not be unknown
+            # If this unit's snap was refreshed during this Juju event, `old_in_progress` will be
+            # `_MachinesInProgress.TRUE` and will not be `_MachinesInProgress.UNKNOWN`
+            old_in_progress is _MachinesInProgress.TRUE
             and self._in_progress is _MachinesInProgress.FALSE
         )
         self._set_app_status()
 
         if self._in_progress is _MachinesInProgress.FALSE:
-            # todo comment: unlike k8s, don't clean up state (no need since no lists that could grow indef) and to avoid race condition on scale up while refresh finishing
+            # Unlike Kubernetes, do not clean up state
+            # (Unlike Kubernetes, there are no lists that could grow indefinitely if not cleaned
+            # up)
+            # Keeping state avoids race conditions on scale up while the refresh is finishing
+
             if self._get_installed_snap_revision():
                 self._installed_workload_version.write_text(self._pinned_workload_version)
-            # todo comment: used to trigger event on last unit to refresh after refresh complete
+            # Trigger Juju event on the last unit to refresh after the refresh completes
+            # (to ensure that unit has at least one Juju event after the refresh completes where
+            # `self.in_progress` is `False`)
             self._relation.my_unit["_unused_last_completed_refresh"] = dataclasses.asdict(
                 self._history.last_refresh_to_up_to_date_charm_code_version
             )

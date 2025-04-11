@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "charm-refresh"
 version = "0.1.0"
-description = ""
+description = "In-place rolling refreshes of stateful charmed applications "
 authors = ["Carl Csaposs <carl.csaposs@canonical.com>"]
 readme = "README.md"
 

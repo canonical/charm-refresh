@@ -131,7 +131,24 @@ class PrecheckFailed(Exception):
 
 @dataclasses.dataclass(eq=False)
 class CharmSpecificCommon(abc.ABC):
-    """Charm-specific callbacks & configuration for in-place refreshes TODO"""
+    """Charm-specific callbacks & configuration for in-place refreshes on Kubernetes & machines
+
+    Subclass this class to implement the callbacks
+
+    For Kubernetes-only charms, subclass `CharmSpecificKubernetes` directly instead
+    For machines-only charms, subclass `CharmSpecificMachines` directly instead
+
+    For charms that support both Kubernetes and machines in a single codebase, use the following
+    class hierarchy:
+        class MyCommonRefresh(charm_refresh.CharmSpecificCommon):
+            # Implement callbacks that are shared across Kubernetes and machines here
+
+        class MyKubernetesRefresh(MyCommonRefresh, charm_refresh.CharmSpecificKubernetes):
+            # Implement Kubernetes-only callbacks (if any) here
+
+        class MyMachinesRefresh(MyCommonRefresh, charm_refresh.CharmSpecificMachines):
+            # Implement machines-only callbacks here
+    """
 
     workload_name: str
     """Human readable workload name (e.g. PostgreSQL)"""
@@ -142,8 +159,19 @@ class CharmSpecificCommon(abc.ABC):
     (e.g. https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro)
 
     Displayed to user in output of `pre-refresh-check` action
+
+    This link should provide documentation for all of the versions that support refreshing from
+    this version
+
+    Note that:
+
+    - the `pre-refresh-check` action runs on the old version (the version the user is refreshing
+      from), so the link in the old charm code version will be shown
+    - at the time this version is released, it is not possible to know all of the future versions
+      that will support refreshing from this version
+    - this link should be chosen carefully so that it does not break in the future, since it will
+      not be possible to update this link in a version after it has been released
     """
-    # TODO: add note about link in old version of charm & keeping evergreen
 
     # TODO: validate length of workload_name in __post_init__?
 
@@ -346,7 +374,10 @@ class CharmSpecificCommon(abc.ABC):
 
 @dataclasses.dataclass(eq=False)
 class CharmSpecificKubernetes(CharmSpecificCommon, abc.ABC):
-    """TODO"""
+    """Charm-specific callbacks & configuration for in-place refreshes on Kubernetes
+
+    Subclass this class to implement the callbacks
+    """
 
     oci_resource_name: str
     """Resource name for workload OCI image in metadata.yaml `resources`
@@ -354,14 +385,30 @@ class CharmSpecificKubernetes(CharmSpecificCommon, abc.ABC):
     (e.g. postgresql-image)
 
     https://juju.is/docs/sdk/metadata-yaml#heading--resources
+
+    The resource must contain a `upstream-source` key that pins the OCI image to a digest
+
+    There must be exactly 1 container in metadata.yaml `containers` that uses this resource
+
+    Example metadata.yaml:
+    ```
+    resources:
+      postgresql-image:
+        type: oci-image
+        upstream-source: ghcr.io/canonical/charmed-mysql@sha256:089fc04dd2d6f1559161ddf4720c1e06559aeb731ecae57b050c9c816e9833e9
+    containers:
+      postgresql:
+        resource: postgresql-image
+    ```
     """
-    # TODO: add note about upstream-source for pinning?
-    # TODO: add note about `containers` assumed in metadata.yaml (to find container name)
 
 
 @dataclasses.dataclass(eq=False)
 class CharmSpecificMachines(CharmSpecificCommon, abc.ABC):
-    """TODO"""
+    """Charm-specific callbacks & configuration for in-place refreshes on machines
+
+    Subclass this class to implement the callbacks
+    """
 
     @abc.abstractmethod
     def refresh_snap(self, *, snap_name: str, snap_revision: str, refresh: "Machines") -> None:
@@ -412,9 +459,11 @@ class CharmSpecificMachines(CharmSpecificCommon, abc.ABC):
 
 
 class Common(abc.ABC):
-    """TODO"""
+    """In-place rolling refreshes of stateful charmed applications
 
-    # TODO: add note about putting at end of charm __init__
+    This class provides the common interface across Kubernetes & machines and cannot be
+    instantiated directly. Instantiate `Kubernetes` or `Machines`
+    """
 
     @property
     @abc.abstractmethod
@@ -533,8 +582,9 @@ class Common(abc.ABC):
 
         This status will not be automatically set. It should be set by the charm code if there is
         no other unit status with a message to display.
+
+        If possible, the charm code should check on every Juju event if this status should be set.
         """
-        # TODO: note about set status on every Juju event? or up to charm?
 
     @abc.abstractmethod
     def __init__(self, charm_specific: CharmSpecificCommon, /):
@@ -600,7 +650,6 @@ class _PauseAfter(str, enum.Enum):
 
 
 class _RefreshVersions:
-    # TODO repr?
     """Versions pinned in this unit's refresh_versions.toml"""
 
     def __init__(self):
@@ -617,10 +666,11 @@ class _RefreshVersions:
 
 
 class _MachinesRefreshVersions(_RefreshVersions):
-    """Versions pinned in this (machines) unit's refresh_versions.toml"""
+    """Versions pinned in this (machines) unit's refresh_versions.toml
 
-    # TODO edit docstring?
-    # TODO add note on machines that workload versions pinned are not necc installed
+    On machines, the pinned workload versions (`_MachinesRefreshVersions.workload` and
+    `_MachinesRefreshVersions.snap_revision`) may be different from the installed workload versions
+    """
 
     def __init__(self):
         super().__init__()
@@ -792,7 +842,18 @@ class _KubernetesUnit(charm.Unit):
 
 
 class Kubernetes(Common):
-    """TODO"""
+    """In-place rolling refreshes of stateful charmed applications on Kubernetes
+
+    Instantiate this class at the end of your charm's `ops.CharmBase` `__init__` method
+
+    This class must only be instantiated once
+
+    Raises `KubernetesJujuAppNotTrusted` if Juju app is not trusted
+
+    Raises `UnitTearingDown` if this unit is being removed
+
+    Raises `PeerRelationNotReady` if the refresh peer relation is not yet available
+    """
 
     # Use `@Common.in_progress.getter` instead of `@property` to preserve docstring from parent
     # class
@@ -1638,7 +1699,6 @@ class Kubernetes(Common):
 
         # Check if this unit is tearing down
         if tearing_down.exists():
-            # TODO improve docstring with exceptions that can be raised
             if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
                 "pre-refresh-check",
                 "force-refresh-start",
@@ -2146,7 +2206,17 @@ class _MachinesDatabagUpToDate(enum.Enum):
 
 
 class Machines(Common):
-    """TODO"""
+    """In-place rolling refreshes of stateful charmed applications on machines
+
+    Instantiate this class at the end of your charm's `ops.CharmBase` `__init__` method
+
+    This class must only be instantiated once
+
+    Raises `UnitTearingDown` if this unit is being removed
+
+    Raises `PeerRelationNotReady` if the refresh peer relation is not yet available or not all
+    units have joined yet
+    """
 
     @Common.in_progress.getter
     def in_progress(self) -> bool:
@@ -3056,7 +3126,6 @@ class Machines(Common):
 
         # Check if this unit is tearing down
         if tearing_down.exists():
-            # TODO improve docstring with exceptions that can be raised
             if isinstance(charm.event, charm.ActionEvent) and charm.event.action in (
                 "pre-refresh-check",
                 "force-refresh-start",

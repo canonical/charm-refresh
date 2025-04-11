@@ -1,3 +1,6 @@
+"""In-place rolling refreshes of stateful charmed applications"""
+# TODO add docs link
+
 from ._main import (
     CharmSpecificCommon,
     CharmSpecificKubernetes,

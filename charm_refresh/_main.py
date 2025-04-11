@@ -58,7 +58,7 @@ class CharmVersion:
         if len(self._pep440_version.release) != 3:
             raise ValueError(
                 f"Invalid charm version {repr(str(self))}. Expected 3 number components after "
-                f"track; got {len(self._pep440_version.release)} components instead: "
+                f"track; got {len(self._pep440_version.release)} components: "
                 f"{repr(self._pep440_version.base_version)}"
             )
         # Example 1: True
@@ -173,7 +173,16 @@ class CharmSpecificCommon(abc.ABC):
       not be possible to update this link in a version after it has been released
     """
 
-    # TODO: validate length of workload_name in __post_init__?
+    def __post_init__(self):
+        workload_name_and_version = f"{self.workload_name} {_RefreshVersions().workload}"
+        if len(workload_name_and_version) > 43:
+            # Lower priority unit status may exceed 120 characters and get truncated in `juju
+            # status`
+            raise ValueError(
+                "The combined length of `workload_name` and the workload version in "
+                "refresh_versions.toml (plus one space) must be <= 43 characters. Got "
+                f"{len(workload_name_and_version)} characters: {repr(workload_name_and_version)}"
+            )
 
     @staticmethod
     @abc.abstractmethod

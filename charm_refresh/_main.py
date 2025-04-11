@@ -1070,8 +1070,9 @@ class Kubernetes(Common):
         if self._unit_controller_revision != self._app_controller_revision:
             if force_start:
                 force_start.fail(
-                    f"Unit {charm.unit.number} has not yet refreshed to latest app revision"
-                )  # TODO UX
+                    f"Unit {charm.unit.number} is outdated and waiting for its pod to be updated "
+                    "by Kubernetes"
+                )
             return
         # If `self._unit_controller_revision == self._app_controller_revision` and
         # `len(self._units) == 1`, `self._in_progress` should be `False`
@@ -1122,7 +1123,7 @@ class Kubernetes(Common):
                 self._refresh_started_local_state.touch()
         if self._refresh_started:
             if force_start:
-                force_start.fail("refresh already started")  # TODO UX
+                force_start.fail(f"Unit {charm.unit.number} already refreshed")
             return
 
         # Run automatic checks
@@ -1448,7 +1449,6 @@ class Kubernetes(Common):
             )
             if handle_action and action:
                 assert action.check_health_of_refreshed_units
-                # TODO UX: change message to refresh not started? (for scale up case)
                 action.fail(f"Unit {self._units[0].number} is unhealthy. Refresh will not resume.")
         else:
             # Check if up-to-date units have allowed the next unit to refresh
@@ -2252,6 +2252,15 @@ class Machines(Common):
     ) -> typing.Optional[ops.StatusBase]:
         if self._in_progress is _MachinesInProgress.FALSE:
             return None
+        if (
+            self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            != _dot_juju_charm_modified_time()
+        ):
+            # This unit's charm code was refreshed without an upgrade-charm event
+            # (https://bugs.launchpad.net/juju/+bug/2068500)
+            return ops.MaintenanceStatus(
+                "Waiting for Juju upgrade-charm or config-changed event. See `juju debug-log`"
+            )
         message = f"{self._charm_specific.workload_name}"
         if self._installed_workload_version.exists():
             message += f" {self._installed_workload_version.read_text()}"
@@ -2302,8 +2311,10 @@ class Machines(Common):
         """
         snap_revision = self._get_installed_snap_revision()
         if snap_revision is None and raise_if_not_installed:
-            # TODO improve message? snap name
-            raise ValueError("`update_snap_revision()` called but workload snap is not installed")
+            raise ValueError(
+                f"`update_snap_revision()` called but {repr(self._workload_snap_name)} snap is "
+                "not installed"
+            )
         if snap_revision != self._relation.my_unit.get("installed_snap_revision"):
             logger.info(f"Snap refreshed to (or installed at) revision {snap_revision}")
             self._relation.my_unit[
@@ -2492,7 +2503,10 @@ class Machines(Common):
                     if in_progress is _MachinesInProgress.FALSE:
                         message = "No refresh in progress"
                     elif in_progress is _MachinesInProgress.UNKNOWN:
-                        message = "Unable to determine if a refresh is in progress"  # TODO improve
+                        message = (
+                            "Determining if a refresh is in progress. Check `juju status` and "
+                            "consider retrying this action"
+                        )
                     else:
                         raise TypeError
                     event.fail(message)
@@ -2535,7 +2549,10 @@ class Machines(Common):
         ):
             # This unit's charm code version is not up-to-date
             if force_start:
-                force_start.fail("waiting for event")  # TODO UX
+                force_start.fail(
+                    "This unit is waiting for a Juju upgrade-charm or config-changed event. See "
+                    "`juju debug-log`"
+                )
             return
 
         original_versions = _OriginalVersions.from_app_databag(self._relation.my_app_ro)
@@ -2573,7 +2590,7 @@ class Machines(Common):
                 self._refresh_started_local_state.touch()
         if self._refresh_started:
             if force_start:
-                force_start.fail("refresh already started")  # TODO UX
+                force_start.fail(f"Unit {charm.unit.number} already refreshed")
             return
 
         # Run automatic checks
@@ -2832,7 +2849,10 @@ class Machines(Common):
                 if self._in_progress is _MachinesInProgress.FALSE:
                     message = "No refresh in progress"
                 elif self._in_progress is _MachinesInProgress.UNKNOWN:
-                    message = "Unable to determine if a refresh is in progress"  # TODO improve
+                    message = (
+                        "Determining if a refresh is in progress. Check `juju status` and "
+                        "consider retrying this action"
+                    )
                 else:
                     raise TypeError
                 action.fail(message)
@@ -2856,10 +2876,6 @@ class Machines(Common):
             if installed_snap_revision == self._pinned_workload_container_version:
                 action.fail("Unit already refreshed")
                 return
-            if not self._refresh_started:
-                action.log(
-                    "Warning: unable to confirm checks ran ... please check status of highest unit"
-                )  # TODO ux
             action.log("Ignoring health of refreshed units")
             action.log(f"Refreshing unit {charm.unit.number}")
             assert self._force_start is None
@@ -2882,7 +2898,10 @@ class Machines(Common):
                 # This code might not run since the charm code may intentionally raise an uncaught
                 # exception in `self._charm_specific.refresh_snap()` if the snap is not refreshed
                 logger.error(f"Failed to refresh {from_to_message}")
-                action.fail("Failed to refresh snap")  # TODO ux
+                action.fail(
+                    "Failed to refresh snap. Check the error message in `juju debug-log` and then "
+                    "consider retrying this action"
+                )
             return
 
         for unit in self._units:
@@ -2963,7 +2982,7 @@ class Machines(Common):
                 # Fail the action so that the user does not mistakenly believe that running the
                 # action caused this unit to refresh—so that the user's mental model of how the
                 # refresh works is more accurate.
-                action.fail("Unit currently refreshing")  # TODO UX
+                action.fail("Unit is currently refreshing")
                 # Do not log any additional information to action output
                 action = None
 
@@ -3004,9 +3023,12 @@ class Machines(Common):
             # exception in `self._charm_specific.refresh_snap()` if the snap is not refreshed
             logger.error(f"Failed to refresh {from_to_message}")
             if action:
-                action.fail("Failed to refresh snap")  # TODO ux
+                action.fail(
+                    "Failed to refresh snap. Check the error message in `juju debug-log` and then "
+                    "consider retrying this action"
+                )
             if self._force_start is not None:
-                self._force_start.result = {  # TODO ux
+                self._force_start.result = {
                     "result": (
                         f"Refresh started. Failed to refresh unit {charm.unit.number}. Unit "
                         f"{charm.unit.number} will retry refresh on the next Juju event"
@@ -3181,16 +3203,15 @@ class Machines(Common):
                     "Charm may be outdated"
                 )
                 logger.warning(
-                    "This unit's charm was refreshed without a Juju `upgrade-charm` event. This "
-                    "is a Juju bug (https://bugs.launchpad.net/juju/+bug/2068500). Waiting for an "
-                    "`upgrade-charm` or `config-changed` event to determine if this unit's charm "
-                    "is up-to-date. If this unit is stuck and has repeatedly logged this message "
-                    "for longer than 5 minutes, please contact the developers of this charm for "
+                    "This unit's charm was refreshed without a Juju upgrade-charm event. This is "
+                    "a Juju bug (https://bugs.launchpad.net/juju/+bug/2068500). Waiting for an "
+                    "upgrade-charm or config-changed event to determine if this unit's charm is "
+                    "up-to-date. If this unit is stuck and has repeatedly logged this message for "
+                    "longer than 5 minutes, please contact the developers of this charm for "
                     f"support. If they are unreachable, consider running `juju config {charm.app} "
                     f"pause_after_unit_refresh=invalid` and then running `juju config {charm.app} "
                     "pause_after_unit_refresh=all`"
                 )
-                # TODO ux: add lower priority unit status for this?
 
         self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
         if not self._relation:
@@ -3479,7 +3500,7 @@ class Machines(Common):
                 if self._in_progress is _MachinesInProgress.TRUE:
                     charm.event.fail("Refresh already in progress")
                 elif self._in_progress is _MachinesInProgress.UNKNOWN:
-                    charm.event.fail("Refresh already in progress")  # TODO ux
+                    charm.event.fail("Refresh already in progress")
                 else:
                     raise TypeError
             elif charm.is_leader:

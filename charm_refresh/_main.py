@@ -1992,6 +1992,16 @@ class Kubernetes(Common):
         (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
         """
 
+        if self._unit_controller_revision == self._app_controller_revision:
+            # TODO docs: charm code should not set workload version
+            if (
+                self._installed_workload_container_version
+                == self._pinned_workload_container_version
+            ):
+                charm.set_app_workload_version(self._pinned_workload_version)
+            elif self._installed_workload_container_version is not None:
+                charm.set_app_workload_version("")
+
         # Determine `self._pause_after`
         # Outdated units are not able to access the current config values
         # This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2084886
@@ -3290,6 +3300,17 @@ class Machines(Common):
                     f"pause_after_unit_refresh=invalid` and then running `juju config {charm.app} "
                     "pause_after_unit_refresh=all`"
                 )
+
+        # Whether this unit's charm code version is up-to-date
+        if (
+            self._history.last_refresh_to_up_to_date_charm_code_version.time_of_refresh
+            == _dot_juju_charm_modified_time()
+        ):
+            # Set app workload version in `juju status` as soon as the charm code is refreshed so
+            # that the workload version matches the charm revision shown for this app in
+            # `juju status`
+            # TODO docs: charm code should not set workload version
+            charm.set_app_workload_version(self._pinned_workload_version)
 
         self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
         if not self._relation:

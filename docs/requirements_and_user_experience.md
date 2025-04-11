@@ -299,7 +299,6 @@ postgresql-k8s  14.12    blocked         10008         Refreshing. Check units >
 [...]
 ```
 where `>=11` is replaced with the units that have refreshed or are currently refreshing
-<!-- TODO: version field? -->
 
 During every Juju event, the leader unit will also log an INFO level message to `juju debug-log`. For example:
 ```
@@ -313,7 +312,6 @@ App         Version  Status     Rev  Message
 postgresql  14.12    blocked  10008  Refreshing. Check units >=11 are healthy & run `resume-refresh` on unit 10. To rollback, `juju refresh --revision 10007`
 ```
 where `>=11` is replaced with the units that have refreshed or are currently refreshing, `10` is replaced with the next unit to refresh, and `10007` is replaced with the original charm code revision
-<!-- TODO: version field? -->
 
 #### If refresh will not pause for manual confirmation
 (`pause_after_unit_refresh` is set to `none` or set to `first` and second unit has refreshed or started to refresh)

@@ -24,7 +24,8 @@ import packaging.version
 import tomli
 import yaml
 
-logger = logging.getLogger(__name__)
+# Use package name instead of module name
+logger = logging.getLogger(__name__.rsplit(".", maxsplit=1)[0])
 
 
 @functools.total_ordering

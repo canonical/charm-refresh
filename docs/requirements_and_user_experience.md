@@ -103,7 +103,7 @@ Note: after the user runs `juju refresh`, the charm cannot prevent refresh of th
 > During rollback, all pods—even those that have not refreshed—will be deleted (workload will restart). This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2036246
 
 > [!CAUTION]
-> If a pod (unit) with an outdated (workload or charm code) version is deleted and re-created on the same version (e.g. because the pod is [evicted](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/)), it will not start. This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2073506
+> If the charm container of a pod (unit) with an outdated (workload or charm code) version is restarted (e.g. because the pod is [evicted](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/)), the unit will not receive any Juju events. (If the workload container was also restarted [e.g. because the pod was evicted], the workload will likely not be running.) This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2073506
 
 ## Machines
 After the user runs `juju refresh`, for each unit of the Juju application:

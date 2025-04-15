@@ -841,9 +841,9 @@ class _KubernetesUnit(charm.Unit):
     def from_pod(cls, pod: lightkube.resources.core_v1.Pod, /):
         # Example: "postgresql-k8s-0"
         pod_name = pod.metadata.name
-        *app_name, unit_number = pod_name.split("-")
+        app_name, unit_number = pod_name.rsplit("-", maxsplit=1)
         # Example: "postgresql-k8s/0"
-        unit_name = f"{'-'.join(app_name)}/{unit_number}"
+        unit_name = f"{app_name}/{unit_number}"
         return cls(
             unit_name,
             controller_revision=pod.metadata.labels["controller-revision-hash"],

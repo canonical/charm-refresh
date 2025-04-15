@@ -255,7 +255,7 @@ class CharmSpecificCommon(abc.ABC):
         Checks & preparations will not run during a rollback.
 
         Raises:
-            PrecheckFailed: If a pre-refresh health check or preparation fails
+            PrecheckFailed: A pre-refresh health check or preparation failed
         """
 
     def run_pre_refresh_checks_before_any_units_refreshed(self) -> None:
@@ -326,7 +326,7 @@ class CharmSpecificCommon(abc.ABC):
         Checks & preparations will not run during a rollback.
 
         Raises:
-            PrecheckFailed: If a pre-refresh health check or preparation fails
+            PrecheckFailed: A pre-refresh health check or preparation failed
         """
         self.run_pre_refresh_checks_after_1_unit_refreshed()
 
@@ -858,11 +858,10 @@ class Kubernetes(Common):
 
     This class must only be instantiated once
 
-    Raises `KubernetesJujuAppNotTrusted` if Juju app is not trusted
-
-    Raises `UnitTearingDown` if this unit is being removed
-
-    Raises `PeerRelationNotReady` if the refresh peer relation is not yet available
+    Raises:
+        KubernetesJujuAppNotTrusted: Juju app is not trusted
+        UnitTearingDown: This unit is being removed
+        PeerRelationNotReady: The refresh peer relation is not yet available
     """
 
     # Use `@Common.in_progress.getter` instead of `@property` to preserve docstring from parent
@@ -2232,10 +2231,10 @@ class Machines(Common):
 
     This class must only be instantiated once
 
-    Raises `UnitTearingDown` if this unit is being removed
-
-    Raises `PeerRelationNotReady` if the refresh peer relation is not yet available or not all
-    units have joined yet
+    Raises:
+        UnitTearingDown: This unit is being removed
+        PeerRelationNotReady: The refresh peer relation is not yet available or not all units have
+          joined yet
     """
 
     @Common.in_progress.getter

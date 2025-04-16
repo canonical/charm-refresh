@@ -9,6 +9,7 @@ import os
 import pathlib
 import platform
 import subprocess
+import time
 import typing
 
 import charm_ as charm
@@ -1733,6 +1734,8 @@ class Kubernetes(Common):
         else:
             self._in_progress = False
 
+        self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
+
         # Raise StatefulSet partition during stop event
         if (
             isinstance(charm.event, charm.StopEvent)
@@ -1752,10 +1755,33 @@ class Kubernetes(Common):
                 # Raise partition
                 self._set_partition(charm.unit.number)
                 logger.info(f"Set StatefulSet partition to {charm.unit.number} during stop event")
+                if self._relation:
+                    # Trigger Juju event on leader unit to lower partition if needed
+                    # Use timestamp instead of pod uid because of
+                    # https://bugs.launchpad.net/juju/+bug/2068500/comments/8
+                    self._relation.my_unit[
+                        "_unused_timestamp_during_last_stop_event_where_partition_raised"
+                    ] = time.time()
 
-        self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
         if not self._relation:
             raise _PeerRelationMissing
+
+        if (
+            isinstance(charm.event, charm.StopEvent)
+            and self._in_progress
+            and charm.unit == self._units[0]
+        ):
+            # Trigger Juju event on other units so that they quickly update app & unit status after
+            # a refresh starts
+            # Use `self._app_controller_revision` instead of `self._unit_controller_revision`
+            # because of https://bugs.launchpad.net/juju/+bug/2068500/comments/8
+            # Usually, during the stop event immediately after a refresh starts, the partition will
+            # be raised (and this is redundant). This is only useful for the exceptionally rare
+            # case where the partition was set to the highest unit number before the refresh
+            # started.
+            self._relation.my_unit[
+                "_unused_app_controller_revision_during_last_stop_event_as_highest_unit"
+            ] = self._app_controller_revision
 
         # Raise StatefulSet partition after pod restart
         # Raise partition in case of rollback from charm code that was raising uncaught exception.
@@ -1848,13 +1874,6 @@ class Kubernetes(Common):
             unit for unit in self._units if unit.pod_uid not in tearing_down_uids3
         ]
         """Sorted from highest to lowest unit number (refresh order)"""
-
-        if isinstance(charm.event, charm.StopEvent) and self._in_progress:
-            # Trigger Juju event on other units so that they quickly update app & unit status after
-            # a refresh starts
-            self._relation.my_unit["_unused_controller_revision_during_last_stop_event"] = (
-                self._unit_controller_revision
-            )
 
         self._refresh_started_local_state = _LOCAL_STATE / "kubernetes_refresh_started"
         # Propagate local state to this unit's databag.

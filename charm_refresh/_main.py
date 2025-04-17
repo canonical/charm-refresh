@@ -29,6 +29,13 @@ import yaml
 logger = logging.getLogger(__name__.rsplit(".", maxsplit=1)[0])
 
 
+def _removeprefix(text: str, /, *, prefix: str) -> str:
+    """python 3.8 compatible equivalent to `str.removeprefix()`"""
+    if text.startswith(prefix):
+        return text[len(prefix) :]
+    return text
+
+
 @functools.total_ordering
 class CharmVersion:
     """Charm code version
@@ -974,7 +981,7 @@ class Kubernetes(Common):
             if self._installed_workload_container_version:
                 message += (
                     "; Unexpected container "
-                    f"{self._installed_workload_container_version.removeprefix('sha256:')[:6]}"
+                    f"{_removeprefix(self._installed_workload_container_version, prefix='sha256:')[:6]}"
                 )
             else:
                 # This message is unlikely to be displayed—the status will probably be overridden

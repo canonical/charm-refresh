@@ -2469,7 +2469,7 @@ class Machines(Common):
         `_MachinesDatabagUpToDate.FALSE`
 
         This method assumes that "last_refresh_to_up_to_date_charm_code_version" is set in the
-        databag
+        unit's databag
         """
         if unit == charm.unit:
             return _MachinesDatabagUpToDate.TRUE
@@ -2495,12 +2495,12 @@ class Machines(Common):
         """Check if a unit's databag is up-to-date
 
         If `self._history.second_to_last_refresh_to_up_to_date_charm_code_version is None` and the
-        charm code version in the databag equals this unit's charm code version, it is not possible
-        to determine if the databag is up-to-date—but this method will assume it is and return
-        `True`
+        charm code version in the unit's databag equals this unit's charm code version, it is not
+        possible to determine if the unit's databag is up-to-date—but this method will assume it is
+        and return `True`
 
         This method assumes that "last_refresh_to_up_to_date_charm_code_version" is set in the
-        databag
+        unit's databag
         """
         result = self._is_units_databag_up_to_date_unknown(unit)
         if result is _MachinesDatabagUpToDate.TRUE:

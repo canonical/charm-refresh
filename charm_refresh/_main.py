@@ -3048,7 +3048,7 @@ class Machines(Common):
 
         if not self._refresh_started:
             if action:
-                action.fail(f"Unit {self._units[0]} is unhealthy. Refresh will not resume.")
+                action.fail(f"Unit {self._units[0].number} is unhealthy. Refresh will not resume.")
             return
 
         # Whether all units before this unit in the refresh order are up-to-date and have

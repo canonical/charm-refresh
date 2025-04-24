@@ -3383,6 +3383,7 @@ class Machines(Common):
         # NOTE: `self._refresh_started` and `self._refresh_started_local_state.exists()` can be out
         # of sync if `self._history.second_to_last_refresh_to_up_to_date_charm_code_version` is
         # `None`
+        presume_log: typing.Optional[str] = None  # Used to conditionally log message later
         if (
             not self._refresh_started
             # Whether this unit's charm code version is up-to-date
@@ -3476,7 +3477,11 @@ class Machines(Common):
                         )
                     else:
                         message += f"{repr(self._installed_charm_version)}"
-                    logger.info(message)
+                    # Save message to log it later if `self._in_progress` is not
+                    # `_MachinesInProgress.FALSE`
+                    # (To avoid logging the message on every Juju event if a refresh is not in
+                    # progress)
+                    presume_log = message
 
                     self._refresh_started = True
                     break
@@ -3618,6 +3623,9 @@ class Machines(Common):
                 raise PeerRelationNotReady
 
         self._in_progress = self._determine_in_progress()
+
+        if presume_log is not None and self._in_progress is not _MachinesInProgress.FALSE:
+            logger.info(presume_log)
 
         # pre-refresh-check action
         if isinstance(charm.event, charm.ActionEvent) and charm.event.action == "pre-refresh-check":

@@ -8,8 +8,8 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.8"
 packaging = ">=24.1"
-charm-api = {git = "https://github.com/canonical/charm-api"}
-charm-json = {git = "https://github.com/canonical/charm-json"}
+charm-api = ">=0.1.1"
+charm-json = ">=0.1.1"
 ops = ">=2.9.0"
 lightkube = ">=0.15.4"
 tomli = ">=2.0.1"

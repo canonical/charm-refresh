@@ -43,7 +43,6 @@ class CharmVersion:
     Stored as a git tag on charm repositories
 
     TODO: link to docs about versioning spec
-    TODO: add v prefix?
     """
 
     def __init__(self, version: str, /):
@@ -162,24 +161,31 @@ class CharmSpecificCommon(abc.ABC):
     workload_name: str
     """Human readable workload name (e.g. PostgreSQL)"""
 
-    refresh_user_docs_url: str
-    """Link to charm's in-place refresh user documentation
+    charm_name: str
+    """Charm name in metadata.yaml
 
-    (e.g. https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro)
+    (e.g. postgresql-k8s)
 
-    Displayed to user in output of `pre-refresh-check` action
+    https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#name
 
-    This link should provide documentation for all of the versions that support refreshing from
-    this version
+    This will be used to generate a URL to the charm's in-place refresh user documentation
+
+    The URL will be displayed to the user in the output of the `pre-refresh-check` action
+
+    The URL will be generated following this format:
+    `https://charmhub.io/{charm_name}/docs/refresh/{charm_version}`. The `/` character in the charm
+    version will not be URL-encoded.
+    (e.g. https://charmhub.io/postgresql-k8s/docs/refresh/14/1.12.0)
+
+    The URL should be redirected to documentation that provides instructions for how to refresh to
+    all of the versions that support refreshing from this version
 
     Note that:
 
     - the `pre-refresh-check` action runs on the old version (the version the user is refreshing
-      from), so the link in the old charm code version will be shown
+      from), so the old charm version will be used to generate the URL
     - at the time this version is released, it is not possible to know all of the future versions
       that will support refreshing from this version
-    - this link should be chosen carefully so that it does not break in the future, since it will
-      not be possible to update this link in a version after it has been released
     """
 
     def __post_init__(self):
@@ -2135,7 +2141,7 @@ class Kubernetes(Common):
                     charm.event.result = {
                         "result": (
                             "Charm is ready for refresh. For refresh instructions, see "
-                            f"{self._charm_specific.refresh_user_docs_url}\n"
+                            f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n"
                             "After the refresh has started, use this command to rollback (copy "
                             "this down in case you need it later):\n"
                             f"`{self._rollback_command}`"
@@ -3648,7 +3654,7 @@ class Machines(Common):
                     charm.event.result = {
                         "result": (
                             "Charm is ready for refresh. For refresh instructions, see "
-                            f"{self._charm_specific.refresh_user_docs_url}\n"
+                            f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n"
                             "After the refresh has started, use this command to rollback:\n"
                             f"`juju refresh {charm.app} --revision "
                             f"{self._pinned_workload_container_version}`"

@@ -1,0 +1,25 @@
+[project]
+name = "cli"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Carl Csaposs", email = "carl.csaposs@canonical.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+]
+
+[project.scripts]
+check-pr-title = "cli.check_version_prefix:check_pr_title"
+create-version-tag = "cli.create_version_tag:main"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["I", "UP"]

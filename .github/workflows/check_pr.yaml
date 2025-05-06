@@ -1,0 +1,30 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+# Derived from https://github.com/canonical/data-platform-workflows/blob/v32.0.0/.github/workflows/check_python_package_pr.yaml
+name: Check pull request
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+    branches:
+      - main
+
+jobs:
+  check-pr:
+    name: Check pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Checkout history with git tags
+      - name: Install CLI
+        run: pipx install .github/workflows/_cli/
+      - name: Check pull request
+        run: check-pr-title
+        # Use env variable to avoid script injection
+        env:
+          TITLE: ${{ github.event.pull_request.title }}

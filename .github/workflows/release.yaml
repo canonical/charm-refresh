@@ -1,0 +1,92 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+# Derived from https://github.com/canonical/data-platform-workflows/blob/main/.github/workflows/release_python_package.md
+name: Release to PyPI
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  # Prevent race conditions (if multiple commits have been pushed since the last release)
+  group: release-python-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tag:
+    name: Tag release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Checkout history with git tags
+      - name: Install CLI
+        run: pipx install .github/workflows/_cli/
+      - name: Create release tag
+        id: create-tag
+        run: create-version-tag
+    outputs:
+      tag: ${{ steps.create-tag.outputs.tag }}
+    permissions:
+      contents: write  # Needed to create git tag
+
+  build:
+    name: Build package
+    needs:
+      - tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Checkout history with git tags
+      - name: Install poetry
+        run: |
+          pipx install poetry
+          pipx inject poetry 'poetry-dynamic-versioning[plugin]'
+      - name: Build package
+        run: poetry build
+      - name: Store the distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions  # Keep in sync with `artifact-name` output
+          path: dist/
+    outputs:
+      artifact-name: python-package-distributions
+
+  release-trusted-publishing:
+    name: Release to PyPI (trusted publishing)
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+    permissions:
+      id-token: write  # Needed for PyPI trusted publishing
+
+  release:
+    name: Create GitHub release
+    needs:
+      - tag
+      - release-trusted-publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create GitHub release
+        run: gh release --repo '${{ github.repository }}' create '${{ needs.tag.outputs.tag }}' --verify-tag --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write  # Needed to create GitHub release

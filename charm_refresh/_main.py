@@ -408,7 +408,7 @@ class CharmSpecificKubernetes(CharmSpecificCommon, abc.ABC):
 
     (e.g. postgresql-image)
 
-    https://juju.is/docs/sdk/metadata-yaml#heading--resources
+    https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources
 
     The resource must contain a `upstream-source` key that pins the OCI image to a digest
 

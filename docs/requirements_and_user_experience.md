@@ -10,29 +10,29 @@ Overview:
 - [User experience](#user-experience) is a full description—excluding user documentation—of how the user interacts with and experiences an in-place refresh of a single Juju application. The user experience satisfies the product requirements.
 
 # Glossary
-[Application](https://juju.is/docs/juju/application), [unit](https://juju.is/docs/juju/unit), [leader](https://juju.is/docs/juju/leader), [charm](https://juju.is/docs/juju/charmed-operator), [revision](https://juju.is/docs/sdk/revision), and [relation/integration](https://juju.is/docs/juju/relation) have the same meaning as in the Juju documentation.
+[Application](https://documentation.ubuntu.com/juju/latest/reference/application/), [unit](https://documentation.ubuntu.com/juju/latest/reference/unit/), [leader](https://documentation.ubuntu.com/juju/latest/reference/unit/#leader-unit), [charm](https://documentation.ubuntu.com/juju/latest/reference/charm/), [revision](https://documentation.ubuntu.com/juju/latest/reference/charm/#charm-revision), and [relation/integration](https://documentation.ubuntu.com/juju/latest/reference/relation/) have the same meaning as in the Juju documentation.
 
-User: User of Juju (e.g. user of juju CLI). Same meaning as "user" in diagram [in the Juju documentation](https://juju.is/docs/juju)
+User: User of Juju (e.g. user of juju CLI). Same meaning as "user" [in the Juju documentation](https://documentation.ubuntu.com/juju/latest/reference/user/)
 
-Event: Same meaning as "[Juju event](https://juju.is/docs/juju/hook)" or "hook" in the Juju documentation. Does not refer to an "ops event"
+Event: Same meaning as "[Juju event](https://documentation.ubuntu.com/juju/latest/reference/hook/)" or "hook" in the Juju documentation. Does not refer to an "ops event"
 
 Workload: A software component that the charm operates (e.g. PostgreSQL)
 - Note: a charm can have 0, 1, or multiple workloads
 
 Charm code: Contents of *.charm file or `charm` directory (e.g. `/var/lib/juju/agents/unit-postgresql-k8s-0/charm/`) on a unit. Contains charm source code and (specific versions of) Python dependencies
 
-Charm code version: Same meaning as charm [revision](https://juju.is/docs/sdk/revision)
+Charm code version: Same meaning as charm [revision](https://documentation.ubuntu.com/juju/latest/reference/charm/#charm-revision)
 
 Outdated version:
 - Charm code version on a unit that **does not** match the application's charm code version (revision) and/or
 - Workload version on a unit that **does not** match the application's workload version
-    - On Kubernetes, the application's workload version is the [OCI resource](https://juju.is/docs/juju/charm-resource) specified by the user
+    - On Kubernetes, the application's workload version is the [OCI resource](https://documentation.ubuntu.com/juju/latest/reference/resource-charm/) specified by the user
     - On machines, the application's workload version is pinned in the application's charm code version (revision)
 
 Up-to-date version:
 - Charm code version on a unit that **does** match the application's charm code version (revision) and/or
 - Workload version on a unit that **does** match the application's workload version
-    - On Kubernetes, the application's workload version is the [OCI resource](https://juju.is/docs/juju/charm-resource) specified by the user
+    - On Kubernetes, the application's workload version is the [OCI resource](https://documentation.ubuntu.com/juju/latest/reference/resource-charm/) specified by the user
     - On machines, the application's workload version is pinned in the application's charm code version (revision)
 
 Original version: workload and/or charm code version of all units immediately after the last completed refresh—or, if no completed refreshes, immediately after `juju deploy` and (on machines) initial installation
@@ -78,16 +78,16 @@ When the user runs `juju refresh`, Juju updates the application's StatefulSet.
 
 Then:
 1. Kubernetes [sends a SIGTERM signal](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination) to the pod with the highest [ordinal](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#ordinal-index) (unit number)
-1. Juju emits a [stop event](https://juju.is/docs/sdk/stop-event) on the unit
+1. Juju emits a [stop event](https://documentation.ubuntu.com/juju/latest/reference/hook/#stop) on the unit
 1. After the unit processes the stop event **or** after the pod's `terminationGracePeriodSeconds` have elapsed, whichever comes first, Kubernetes deletes the pod
     - `terminationGracePeriodSeconds` is set to 30 seconds as of Juju 3.3 (300 seconds in Juju <=3.2). It is [not recommended](https://chat.charmhub.io/charmhub/pl/i4czczen7f8i9cecdzpfmazs6a) for charms to patch this value. Details: https://bugs.launchpad.net/juju/+bug/2035102
 
 1. Kubernetes re-creates the pod using the updated StatefulSet
     - This refreshes the unit's charm code and container image(s) (i.e. workload(s))
-1. Juju emits an [upgrade-charm event](https://juju.is/docs/sdk/upgrade-charm-event) on the unit
+1. Juju emits an [upgrade-charm event](https://documentation.ubuntu.com/juju/latest/reference/hook/#upgrade-charm) on the unit
     - Note: Receiving an upgrade-charm event does not guarantee that a unit has refreshed. If, at any time, a pod is deleted and re-created, Juju may emit an upgrade-charm event on that unit. Details: https://bugs.launchpad.net/juju/+bug/2021891
 1. After the pod's [readiness probe](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-probes) succeeds, the previous steps are repeated for the pod with the next highest ordinal
-    - For a Juju unit, [pebble's health endpoint](https://github.com/canonical/pebble?tab=readme-ov-file#health-endpoint) is used for the readiness probe. By default, pebble will always succeed the probe
+    - For a Juju unit, [pebble's health endpoint](https://documentation.ubuntu.com/pebble/reference/health-checks/#health-endpoint) is used for the readiness probe. By default, pebble will always succeed the probe
 
 Charms can interrupt this process by setting the [`RollingUpdate` partition](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions).
 > If a partition is specified, all Pods with an ordinal that is greater than or equal to the partition will be updated when the StatefulSet's `.spec.template` is updated. All Pods with an ordinal that is less than the partition will not be updated, and, even if they are deleted, they will be recreated at the previous version.
@@ -97,7 +97,7 @@ For example, in a 3-unit Juju application (unit numbers: 0, 1, 2), as unit 2's p
 Note: after the user runs `juju refresh`, the charm cannot prevent refresh of the highest unit number.
 
 > [!WARNING]
-> Charms should not set the partition greater than the highest unit number. If they do, `juju refresh` will not trigger any [Juju events](https://juju.is/docs/juju/hook).
+> Charms should not set the partition greater than the highest unit number. If they do, `juju refresh` will not trigger any [Juju events](https://documentation.ubuntu.com/juju/latest/reference/hook/).
 
 > [!IMPORTANT]
 > During rollback, all pods—even those that have not refreshed—will be deleted (workload will restart). This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2036246
@@ -112,7 +112,7 @@ After the user runs `juju refresh`, for each unit of the Juju application:
 
 1. If the unit is currently executing another event, Juju [waits for the unit to finish executing that event](https://matrix.to/#/!xzmWHtGpPfVCXKivIh:ubuntu.com/$firps4AV5YInSDQh4izbPTZ0B0e0QwAbQVMaURT0T3o?via=ubuntu.com&via=matrix.org&via=fsfe.org)
 1. Juju refreshes the unit's charm code
-1. Juju emits an [upgrade-charm event](https://juju.is/docs/sdk/upgrade-charm-event) on that unit
+1. Juju emits an [upgrade-charm event](https://documentation.ubuntu.com/juju/latest/reference/hook/#upgrade-charm) on that unit
 
 This process happens concurrently and independently for each unit. For example, if one unit is executing another event, that will not prevent Juju from refreshing other units' charm code.
 
@@ -238,20 +238,20 @@ Running operation 1 with 1 task
 
 Waiting for task 2...
 result: |-
-  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro
+  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/postgresql-k8s/docs/refresh/14/1.12.0
   After the refresh has started, use this command to rollback (copy this down in case you need it later):
   `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `https://charmhub.io/postgresql-k8s/docs/h-upgrade-intro` is replaced with the link to the charm's refresh documentation, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original (current) charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original (current) workload version
+where `https://charmhub.io/postgresql-k8s/docs/refresh/14/1.12.0` is replaced with the link to the charm's refresh documentation, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original (current) charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original (current) workload version
 
 #### Machines
 ```
 result: |-
-  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/postgresql/docs/h-upgrade-intro
+  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/postgresql/docs/refresh/14/1.12.0
   After the refresh has started, use this command to rollback:
   `juju refresh postgresql --revision 10007`
 ```
-where `https://charmhub.io/postgresql/docs/h-upgrade-intro` is replaced with the link to the charm's refresh documentation, `postgresql` is replaced with the Juju application name, and `10007` is replaced with the original (current) charm code revision
+where `https://charmhub.io/postgresql/docs/refresh/14/1.12.0` is replaced with the link to the charm's refresh documentation, `postgresql` is replaced with the Juju application name, and `10007` is replaced with the original (current) charm code revision
 
 ### If pre-refresh health checks & preparations are not successful
 ```
@@ -305,7 +305,7 @@ During every Juju event, the leader unit will also log an INFO level message to 
 ```
 unit-postgresql-0: 11:34:35 INFO unit.postgresql/0.juju-log Refresh in progress. To rollback, run `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### Machines
 ```
@@ -361,7 +361,7 @@ The unit will also log an ERROR level message to `juju debug-log`. For example:
 ```
 unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log `juju refresh` was run with missing or incorrect OCI resource. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. If you are intentionally attempting to refresh to a PostgreSQL container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `check-workload-container` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### (Kubernetes only) If refresh is incompatible
 On Kubernetes, after the first unit refreshes and before that unit starts its workload, that unit (new charm code) checks if it supports refreshing from the previous workload & charm code version.
@@ -378,7 +378,7 @@ The unit will also log an INFO level message to `juju debug-log`. For example:
 ```
 unit-postgresql-k8s-2: 11:34:35 INFO unit.postgresql-k8s/2.juju-log Refresh incompatible. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If automatic pre-refresh health checks & preparations fail
 Regardless of whether the user runs the `pre-refresh-check` action before `juju refresh`, the charm will run pre-refresh health checks & preparations after `juju refresh`—unless it is a rollback.
@@ -401,7 +401,7 @@ Kubernetes
 ```
 unit-postgresql-k8s-2: 11:34:35 ERROR unit.postgresql-k8s/2.juju-log Pre-refresh check failed: Backup in progress. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run `juju show-action postgresql-k8s force-refresh-start` for more information
 ```
-where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 Machines
 ```
@@ -591,7 +591,7 @@ Running operation 1 with 1 task
 Waiting for task 2...
 Action id 2 failed: Refresh is to PostgreSQL container version that has not been validated to work with the charm revision. Rollback by running `juju refresh postgresql-k8s --revision 10007 --resource postgresql-image=registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6`
 ```
-where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `PostgreSQL` is replaced with the name of the workload(s), `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If `check-workload-container=false`
 ```
@@ -626,7 +626,7 @@ Machines
 ```
 Action id 2 failed: Refresh incompatible. Rollback with `juju refresh`
 ```
-where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If `check-compatibility=false`
 ```
@@ -661,7 +661,7 @@ Machines
 ```
 Action id 2 failed: Pre-refresh check failed: Backup in progress. Rollback with `juju refresh`
 ```
-where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://juju.is/docs/sdk/charmcraft-yaml#heading--resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
+where `Backup in progress` is replaced with a message that is specific to the pre-refresh health check or preparation that failed, `postgresql-k8s` is replaced with the Juju application name, `10007` is replaced with the original charm code revision, `postgresql-image` is replaced with the [OCI resource name](https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources), and `registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6` is replaced with the original workload version
 
 ##### If `run-pre-refresh-checks=false`
 ```

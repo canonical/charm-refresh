@@ -522,7 +522,7 @@ force-refresh-start:
     Force refresh of first unit
     
     Must run with at least one of the parameters `=false`
-  properties:
+  params:
     check-compatibility:
       type: boolean
       default: true
@@ -711,7 +711,7 @@ resume-refresh:
     Exception: if automatic health checks fail after a unit has refreshed, the refresh will pause.
     
     If `pause_after_unit_refresh` is set to `none`, this action will have no effect unless it is called with `check-health-of-refreshed-units` as `false`.
-  properties:
+  params:
     check-health-of-refreshed-units:
       type: boolean
       default: true

@@ -226,6 +226,7 @@ This action will fail if run before a rollback.
 # actions.yaml
 pre-refresh-check:
   description: Check if charm is ready to refresh
+  additionalProperties: false
 ```
 
 ### If pre-refresh health checks & preparations are successful
@@ -521,7 +522,7 @@ force-refresh-start:
     Force refresh of first unit
     
     Must run with at least one of the parameters `=false`
-  params:
+  properties:
     check-compatibility:
       type: boolean
       default: true
@@ -543,7 +544,7 @@ force-refresh-start:
         Potential of data loss and downtime during and after refresh
         
         If `false`, allow refresh to PostgreSQL container version that has not been validated to work with the charm revision
-  required: []
+  additionalProperties: false
 ```
 where `PostgreSQL` is replaced with the name of the workload(s)
 
@@ -710,7 +711,7 @@ resume-refresh:
     Exception: if automatic health checks fail after a unit has refreshed, the refresh will pause.
     
     If `pause_after_unit_refresh` is set to `none`, this action will have no effect unless it is called with `check-health-of-refreshed-units` as `false`.
-  params:
+  properties:
     check-health-of-refreshed-units:
       type: boolean
       default: true
@@ -721,7 +722,7 @@ resume-refresh:
         
         Warning: if first unit to refresh is unhealthy, consider running `force-refresh-start` action on that unit instead of using this parameter.
         If first unit to refresh is unhealthy because compatibility checks, pre-refresh checks, or workload container checks are failing, this parameter is more destructive than the `force-refresh-start` action.
-  required: []
+  additionalProperties: false
 ```
 
 The user can also change the value of the `pause_after_unit_refresh` config (e.g. from `all` to `none`) to resume the refresh.

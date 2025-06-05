@@ -1,0 +1,62 @@
+= 21. (Kubernetes only) Handle KubernetesJujuAppNotTrusted exception
+:reftext: 21. Handle KubernetesJujuAppNotTrusted
+:page-pagination: sibling
+
+On Kubernetes, charm-refresh needs permission to control the Kubernetes StatefulSet partition.
+
+If that permission has not been granted to the charm, KubernetesJujuAppNotTrusted will be raised during the instantiation of charm_refresh.Kubernetes.
+
+.User experience
+****
+To grant the permission to the charm, the user needs to:
+
+* Deploy the charm with `--trust` or
+* Run `juju trust` with `--scope=cluster` after deployment
+
+More information: {url-juju-docs}/howto/manage-applications/#trust-an-application-with-a-credential[Trust an application]
+****
+
+[#preferred]
+== Preferred approach
+
+Immediately exit the charm code until KubernetesJujuAppNotTrusted is no longer raised.
+
+NOTE: charm-refresh will automatically set the app status to instruct the user to run `juju trust`.
+More info: xref:ROOT:user-experience.adoc[]
+
+.Example charm.py
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        # [...]
+
+        try:
+            self.refresh = charm_refresh.Kubernetes(
+                {ex-charm-specific-k8s}(
+                    workload_name="{ex-workload}",
+                    charm_name="{ex-charm}",
+                    oci_resource_name="{ex-oci-resource-name}",
+                )
+            )
+        except charm_refresh.PeerRelationNotReady:
+            # [...]
+        except charm_refresh.UnitTearingDown:
+            # [...]
+        except charm_refresh.KubernetesJujuAppNotTrusted:
+            sys.exit() # <.>
+
+        # [...]
+----
+<.> {empty}
+include::partial$sys-exit.adoc[]
+
+[#alternative]
+== Alternative approach
+
+Some charms heavily depend on executing code during specific Juju events.
+
+In that case, do not catch KubernetesJujuAppNotTrusted so that an uncaught exception is raised.
+
+This will fail the first Juju event on each unit, causing Juju to retry that event until it succeeds.
+Juju events that are queued (to run after the first event) should be preserved.

@@ -1,0 +1,38 @@
+= 1. Is this for you?
+:page-pagination: sibling
+
+charm-refresh is designed for in-place refreshes of stateful charmed applications.
+
+[#out-of-place]
+== Out-of-place upgrade
+
+For some charms, it may be sufficient to only support "out-of-place" upgrades.
+
+An "out-of-place" upgrade means to re-deploy the application instead of ``juju refresh``ing the existing application.
+(For stateful charms, an "out-of-place" upgrade also often involves a backup of the old application and a restore to the new application--or some other method to transfer the state, such as asynchronous replication.)
+
+If this is sufficient for your charm, do this instead--it is usually much simpler (from an implementation and a backwards compatibility perspective).
+
+[#stateless]
+== Stateless workload
+
+For charms with a workload that is stateless, implementing and maintaining charm-refresh may have a greater cost than the value charm-refresh provides.
+
+Because of its design for stateful workloads, charm-refresh may be more complex than what's needed for stateless workloads.
+
+However, charm-refresh may be useful for stateless workloads if any of this functionality is needed:
+
+* refresh units one at a time to maintain high availability
+* ability to rollback (in some situations) even if the charm code is raising an uncaught exception or the user refreshed to the incorrect charm revision or OCI resource
+* run automatic checks before & during the refresh and automatically halt the refresh if any check fails
+* coordinated refresh with other Juju applications
+
+[#unsure]
+== Not sure?
+
+. Read these steps for more context
+** xref:glossary.adoc[]
+** xref:juju-refresh.adoc[]
+** xref:product-requirements.adoc[]
+** xref:backwards-compatibility.adoc[]
+. xref:ROOT:contact.adoc[]!

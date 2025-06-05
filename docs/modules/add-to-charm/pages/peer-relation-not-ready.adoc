@@ -1,0 +1,80 @@
+= 19. Handle PeerRelationNotReady exception
+:reftext: 19. Handle PeerRelationNotReady
+:page-pagination: sibling
+
+During the instantiation of charm_refresh.Kubernetes or charm_refresh.Machines, PeerRelationNotReady will be raised when:
+
+* the refresh peer relation is not yet available or
+* (machines only) not all of the application's units have joined the relation yet
+
+NOTE: The refresh peer relation is not part of the xref:public-interface.adoc[]
+
+This happens:
+
+* During initial deployment
+* On a unit that is added during scale up
+
+A user may scale the application up or down while a refresh is in progress.
+
+Therefore, when PeerRelationNotReady is raised on a unit that is added during scale up, a refresh may be in progress.
+
+If PeerRelationNotReady is raised on a unit that is added during scale up, the charm code:
+
+* (Machines only) Must not install the workload
++
+.Why?
+[%collapsible]
+====
+When a unit is added during scale up, it must successfully process several Juju events before it gets read or write access to certain information (e.g. peer relations).
+
+Especially on machines, charm-refresh relies on its peer relation for coordination of the refresh & rollback, handling Juju actions, setting accurate status messages, and several other critical functions.
+
+Installing a workload snap can take several minutes on a healthy network.
+In a critical situation (where the ability to quickly rollback is most important), the network may be degraded or offline.
+
+By waiting until after PeerRelationNotReady is no longer being raised before installing the workload, charm-refresh is better able to coordinate the refresh and assist the user to more quickly recover in critical situations.
+====
+
+* Must not start the workload
+* Must not run any xref:in-progress.adoc#which-operations[operation that would be dangerous to run while a refresh is in progress]
+
+.Alternative: Declare scaling up as not supported
+[%collapsible]
+====
+If delivering the in-place refresh implementation quickly is more important than delivering a robust implementation--and ensuring that the workload is not installed during scale up while PeerRelationNotReady is raised would require substantial refactoring--charms may instead clearly document (in the user documentation) that scaling up while a refresh is in progress is not supported and may cause data loss or downtime.
+
+Before proceeding with this alternative, confirm that this tradeoff is acceptable to engineering and product managers.
+====
+
+For some charms, it may be simpler to handle both cases (initial deployment, scale up) where PeerRelationNotReady is raised in the same way--i.e. in the initial deployment case (while PeerRelationNotReady is raised), to not install the workload, not start the workload, and not run any dangerous operation.
+
+.Example charm.py where initial install & scale up cases are handled in the same way
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        # [...]
+
+        try: # <.>
+            self.refresh = charm_refresh.Kubernetes(
+                {ex-charm-specific-k8s}(
+                    workload_name="{ex-workload}",
+                    charm_name="{ex-charm}",
+                    oci_resource_name="{ex-oci-resource-name}",
+                )
+            )
+        except charm_refresh.PeerRelationNotReady: # <.>
+            self.unit.status = ops.MaintenanceStatus(
+                "Waiting for peer relation"
+            )
+            if self.unit.is_leader():
+                self.app.status = ops.MaintenanceStatus(
+                    "Waiting for peer relation"
+                )
+            sys.exit() # <.>
+        # [...]
+----
+<.> Wrap the code from xref:instantiate.adoc[] in a try block
+<.> Add `except charm_refresh.PeerRelationNotReady`
+<.> {empty}
+include::partial$sys-exit.adoc[]

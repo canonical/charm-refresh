@@ -1,0 +1,9 @@
+= 30. Move instantiation of refresh class
+:page-pagination: sibling
+
+After following xref:refresh-snap.adoc[] and xref:pre-refresh-checks.adoc[], the instantiation of charm_refresh.Kubernetes or charm_refresh.Machines may need to be moved so that everything referenced in your CharmSpecific callbacks is defined.
+
+Instructions:
+
+* xref:instantiate/kubernetes.adoc#where[Kubernetes]
+* xref:instantiate/machines.adoc#where[Machines]

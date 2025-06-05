@@ -1,0 +1,6 @@
+[#implementation-class]
+== Which class to implement in
+
+* For xref:charm-specific/kubernetes-and-machines.adoc#implementation-class[a charm with a Kubernetes variant & a machine variant that share code]
+* For xref:charm-specific/kubernetes-only.adoc#implementation-class[a Kubernetes-only charm]
+* For xref:charm-specific/machines-only.adoc#implementation-class[a machine-only charm]

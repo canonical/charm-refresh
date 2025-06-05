@@ -1,0 +1,54 @@
+= Machines
+
+[#prerequisites]
+== Prerequisites
+
+The workload must be installed as a snap.
+
+The charm code must pin a single revision of the workload snap per architecture.
+In other words, when a charm revision is deployed, it must always install the same workload snap revision.
+
+[#create]
+== Create refresh_versions.toml
+
+At the root of the charm directory (i.e. in the same directory as charmcraft.yaml), create the `refresh_versions.toml` file
+
+.refresh_versions.toml
+[,toml,subs="+attributes"]
+----
+# {site-url}/latest/refresh-versions-toml/
+
+charm_major = 1 # <.>
+workload = "{ex-workload-version}" # <.>
+
+[snap]
+name = "{ex-snap}" # <.>
+
+[snap.revisions] # <.>
+# amd64
+x86_64 = "{ex-snap-rev}"
+# arm64
+aarch64 = "{ex-snap-rev-arm}"
+----
+<.> Leave this as `1`
+<.> Replace `{ex-workload-version}` with the upstream workload version in the pinned snap revisions.
+All of the snap revisions must contain this workload version.
+The value must be a string
+<.> Replace `{ex-snap}` with the name of the workload snap
+<.> Specify a snap revision for each architecture the charm supports.
+See <<architecture-key>>.
+The snap revisions must be strings
+
+TIP: A later step will instruct you to ensure the snap revisions are only hard-coded in one place (refresh_versions.toml).
+Don't worry about removing duplicate hard-coded values now
+
+[#architecture-key]
+=== Architecture key
+
+To determine the key (under `snap.revisions`) for an architecture, run this command on a machine with that architecture:
+
+[,console]
+----
+$ python3 -c 'import platform; print(platform.machine())'
+x86_64
+----

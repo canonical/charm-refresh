@@ -1,0 +1,40 @@
+= 20. Handle UnitTearingDown exception
+:reftext: 20. Handle UnitTearingDown
+:page-pagination: sibling
+
+During the instantiation of charm_refresh.Kubernetes or charm_refresh.Machines, UnitTearingDown will be raised when the unit (that is running the charm code) is tearing down.
+
+This happens:
+
+* On a unit that is removed during scale down
+* During application removal
+* On subordinate charms when the relation with the principal charm is removed
+
+When UnitTearingDown is raised, a refresh may be in progress.
+
+.Example charm.py
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        # [...]
+
+        try:
+            self.refresh = charm_refresh.Machines(
+                {ex-charm-specific-vm}(
+                    workload_name="{ex-workload}",
+                    charm_name="{ex-charm-vm}",
+                )
+            )
+        except charm_refresh.PeerRelationNotReady:
+            # [...]
+        except charm_refresh.UnitTearingDown:
+            # <.>
+            self.unit.status = ops.MaintenanceStatus("Tearing down")
+            snap.uninstall()
+            sys.exit() # <.>
+        # [...]
+----
+<.> Gracefully shut down & clean up
+<.> {empty}
+include::partial$sys-exit.adoc[]

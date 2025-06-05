@@ -1,0 +1,40 @@
+= 22. Add CharmSpecific fields
+:page-pagination: sibling
+
+The implementation of CharmSpecific callbacks in xref:refresh-snap.adoc[] and xref:pre-refresh-checks.adoc[] may require you to add fields to your CharmSpecific class.
+
+CAUTION: The implementation of the xref:is-compatible.adoc[is_compatible] callback must not use additional fields
+
+Since CharmSpecific is a dataclass, use the https://docs.python.org/3/library/dataclasses.html[dataclasses] syntax to add fields.
+
+.Example: Add _charm field
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    _charm: "{ex-charm-class}" # <.>
+
+    def run_pre_refresh_checks_after_1_unit_refreshed(self) -> None:
+        if self._charm.backup_in_progress: # <.>
+            # [...]
+
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        # [...]
+
+        self.refresh = charm_refresh.Kubernetes(
+            {ex-charm-specific-k8s}(
+                workload_name="{ex-workload}",
+                charm_name="{ex-charm}",
+                oci_resource_name="{ex-oci-resource-name}",
+                _charm=self, # <.>
+            )
+        )
+
+        # [...]
+----
+<.> Add `_charm` field
+<.> Example usage in CharmSpecific callback
+<.> Pass the field in the instantiation of your CharmSpecific class
+
+include::partial$charm-specific-class.adoc[]

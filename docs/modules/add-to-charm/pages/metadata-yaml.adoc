@@ -1,0 +1,13 @@
+= 9. Update metadata.yaml
+:page-pagination: sibling
+
+Add this peer relation to the `metadata.yaml` file.
+It should be located at the root of the charm directory (i.e. in the same directory as charmcraft.yaml).
+
+.metadata.yaml
+[,yaml]
+----
+peers:
+  refresh-v-three:
+    interface: refresh
+----

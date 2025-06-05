@@ -6,5 +6,41 @@ version:
   # version in the files on the main branch or in the Antora playbook
   'antora-main-(?<refresh>+({0..9})).(?<major>+({0..9})).(?<minor>+({0..9}))': '$<refresh>.$<major>.$<minor>'
   # Antora will fall back to refname as version if the refname does not match a pattern above
+asciidoc:
+  attributes:
+    # Use when character replacement of "--" does not work
+    # (https://docs.asciidoctor.org/asciidoc/latest/subs/replacements/)
+    emdash: '—&#8203;'
+
+    url-juju-docs: 'https://documentation.ubuntu.com/juju/latest'
+
+    # Example values
+    ex-charm: postgresql-k8s
+    ex-charm-vm: postgresql
+    ex-charm-rev: '602'
+    ex-charm-rev-to: '613'
+    ex-charm-version: 16/1.19.0
+    ex-workload: PostgreSQL
+    ex-oci-resource-name: postgresql-image
+    ex-container-name: postgresql
+    ex-upstream-source-image-name: ghcr.io/canonical/charmed-postgresql
+    ex-image-name: 'registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/{ex-oci-resource-name}'
+    ex-image-digest: sha256:e53eb99abd799526bb5a5e6c58180ee47e2790c95d433a1352836aa27d0914a4
+    ex-image-digest-short: e53eb9
+    ex-image-digest-to: sha256:1b926dcb5aad4ac00585d282e7cc28e13abefa247f69e5bb40152d2b8b7dda40
+    ex-image-digest-to-short: 1b926d
+    ex-workload-version: '16.8'
+    ex-workload-version-to: '16.9'
+    ex-snap-rev: '182'
+    ex-snap-rev-arm: '181'
+    ex-snap-rev-to: '183'
+    ex-snap: charmed-postgresql
+    ex-rollback-command: 'juju refresh {ex-charm} --revision {ex-charm-rev} --resource {ex-oci-resource-name}={ex-image-name}@{ex-image-digest}'
+    ex-precheck-failure: Backup in progress
+    ex-charm-specific-common: '{ex-workload}Refresh'
+    ex-charm-specific-k8s: 'Kubernetes{ex-charm-specific-common}'
+    ex-charm-specific-vm: 'Machines{ex-charm-specific-common}'
+    ex-charm-class: '{ex-workload}Charm'
 nav:
+  - modules/add-to-charm/nav.adoc
   - modules/ROOT/nav.adoc

@@ -1,0 +1,76 @@
+= 24. (Machines only) Implement CharmSpecific.refresh_snap
+:reftext: 24. Implement refresh_snap
+:page-pagination: sibling
+
+This page only applies to machine charms.
+
+.refresh_snap method signature
+[,python]
+----
+def refresh_snap(
+    self,
+    *,
+    snap_name: str,
+    snap_revision: str,
+    refresh: charm_refresh.Machines,
+) -> None:
+----
+
+refresh_snap must:
+
+// List items are referenced by number; update references if numbering changes
+1. Gracefully stop the workload, if it is running
+2. Refresh the workload snap
+3. Immediately call `refresh.update_snap_revision()`
+
+IMPORTANT: `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
+It should be the next line of code after the snap refresh--no other code should run in between
+
+If refreshing the snap (#2) fails:
+
+[loweralpha]
+. The charm code must not retry the snap refresh.
+refresh_snap will be called again by charm-refresh if the snap refresh should be retried
++
+.Why?
+[%collapsible]
+====
+In case the user rolls back
+====
+
+. If the snap revision has not changed, the charm code should start the workload
+. The charm code must raise an uncaught exception to ensure the unit receives another Juju event
+
+.Example refresh_snap
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-vm}(charm_refresh.CharmSpecificMachines):
+    def refresh_snap(
+        self,
+        *,
+        snap_name: str,
+        snap_revision: str,
+        refresh: charm_refresh.Machines,
+    ) -> None:
+        gracefully_shutdown_workload_service()
+        revision_before_refresh = snap_.revision
+        assert snap_revision != revision_before_refresh
+        try:
+            snap_.ensure(revision=snap_revision)
+        except (snap.SnapError, snap.SnapAPIError):
+            logger.exception("Snap refresh failed")
+            if snap_.revision == revision_before_refresh:
+                start_workload_service()
+                raise
+            else:
+                refresh.update_snap_revision()
+                raise
+        else:
+            refresh.update_snap_revision()
+
+        # TODO <.>
+----
+<.> xref:next-unit-allowed-to-refresh.adoc[] provides instructions for implementing the second part of refresh_snap
+
+TIP: The implementation of refresh_snap may require you to xref:add-charm-specific-fields.adoc[]

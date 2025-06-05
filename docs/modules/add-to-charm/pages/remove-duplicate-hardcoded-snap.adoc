@@ -1,0 +1,38 @@
+= 28. (Machines only) Remove duplicate hardcoded snap info
+:reftext: 28. Remove duplicate hardcoded snap info
+:page-pagination: sibling
+
+Remove information that is hardcoded in the charm code and that duplicates the snap section of xref:refresh-versions-toml/machines.adoc[refresh_versions.toml].
+
+.Example refresh_versions.toml snap section
+[,toml,subs="+attributes"]
+----
+[snap]
+name = "{ex-snap}" # <.>
+
+[snap.revisions] # <.>
+# amd64
+x86_64 = "{ex-snap-rev}"
+# arm64
+aarch64 = "{ex-snap-rev-arm}"
+----
+<.> <<name>>
+<.> <<revisions>>
+
+[#name]
+== Snap name
+
+Replace the hardcoded snap name (e.g. "{ex-snap}") with:
+
+* the xref:refresh-snap.adoc[CharmSpecific.refresh_snap method's `snap_name` parameter] or
+* (outside of refresh_snap) `charm_refresh.snap_name()`
+
+[#revisions]
+== Snap revisions
+
+Replace hardcoded snap revision(s) (e.g. "{ex-snap-rev}", "{ex-snap-rev-arm}") with:
+
+* the xref:refresh-snap.adoc[CharmSpecific.refresh_snap method's `snap_revision` parameter] or
+* `charm_refresh.Machines().pinned_snap_revision`
++
+IMPORTANT: `pinned_snap_revision` must only be used during the initial snap installation and must not be used to refresh the snap

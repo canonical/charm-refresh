@@ -1,0 +1,71 @@
+= 23. Check workload_allowed_to_start
+:page-pagination: sibling
+
+This page is required for Kubernetes charms.
+This page is optional for machine charms.
+
+For machine-only charms, it is recommended to skip this page.
+
+For a charm with a Kubernetes variant & a machine variant that share code, this page can be implemented in the shared code if that simplifies the codebase.
+
+'''
+
+The charm code must check that workload_allowed_to_start is True before starting the unit's workload.
+
+.Why?
+[%collapsible]
+====
+On Kubernetes, it is not possible to prevent refresh of the highest number unit.
+More info: xref:juju-refresh.adoc[]
+
+Therefore, the automatic checks (
+
+* that the deployed workload OCI image hash matches the hash pinned in the charm code
+* that the refresh xref:is-compatible.adoc[is_compatible]
+* xref:pre-refresh-checks.adoc[pre-refresh health checks & preparations]
+
+) run after the highest number unit is refreshed.
+
+If any of the checks fail, the highest number unit must not start its workload (to prevent data corruption/loss and to ensure that it will be possible to rollback).
+
+NOTE: workload_allowed_to_start must be checked on all units (not just the highest number unit) in case the user scales up or down the application during the refresh
+====
+
+If xref:peer-relation-not-ready.adoc[PeerRelationNotReady] is raised on a unit that is added during scale up, the charm code must assume that the workload is not allowed to start until PeerRelationNotReady is no longer raised and the charm code can check the value of workload_allowed_to_start.
+
+[TIP]
+====
+For a charm with a Kubernetes variant & a machine variant that share code, `charm_refresh.Common` can be used as a type hint for the interface that is shared across charm_refresh.Kubernetes and charm_refresh.Machines
+
+.Example
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase, abc.ABC):
+    refresh: charm_refresh.Common
+
+class Kubernetes{ex-charm-class}({ex-charm-class}):
+    def __init__(self, *args):
+        self.refresh = charm_refresh.Kubernetes(
+            # [...]
+        )
+
+class Machines{ex-charm-class}({ex-charm-class}):
+    def __init__(self, *args):
+        self.refresh = charm_refresh.Machines(
+            # [...]
+        )
+----
+====
+
+.Example
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    refresh: charm_refresh.Common
+
+    def reconcile(self, event):
+        if self.refresh.workload_allowed_to_start:
+            # [...]
+        else:
+            # [...]
+----

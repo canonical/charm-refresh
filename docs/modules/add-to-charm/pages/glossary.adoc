@@ -1,0 +1,5 @@
+= 2. Glossary
+:page-pagination: sibling
+:page-noindex:
+
+include::ROOT:partial$glossary.adoc[]

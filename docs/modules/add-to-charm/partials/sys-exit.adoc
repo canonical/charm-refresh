@@ -1,0 +1,2 @@
+This may be incompatible with your charm code or charm code dependencies that depend on executing code during specific Juju events.
+In those cases, a more complex approach may be needed

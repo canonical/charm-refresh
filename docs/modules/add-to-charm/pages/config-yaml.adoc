@@ -1,0 +1,14 @@
+= 8. Update config.yaml
+:page-pagination: sibling
+
+Add this config option to the `config.yaml` file.
+It should be located at the root of the charm directory (i.e. in the same directory as charmcraft.yaml).
+If the file does not exist, create it.
+
+.config.yaml
+[,yaml]
+----
+include::example$config.yaml[]
+----
+
+TIP: Hover over the box above and click the symbol in the top right to copy to your clipboard

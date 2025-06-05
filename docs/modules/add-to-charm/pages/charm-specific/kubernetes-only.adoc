@@ -1,0 +1,27 @@
+= Kubernetes only
+
+This page is for a Kubernetes-only charm.
+For a charm with a Kubernetes variant & a machine variant that share code, go to xref:./kubernetes-and-machines.adoc[].
+
+'''
+
+Subclass CharmSpecificKubernetes:
+
+.Example
+[,python,subs="+attributes"]
+----
+import dataclasses
+
+import charm_refresh
+
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-k8s}(charm_refresh.CharmSpecificKubernetes):
+    pass
+----
+
+[#implementation-class]
+== Which class to implement in
+
+In future steps, you will implement code for the CharmSpecific class.
+
+Implement the code in the class you created above.

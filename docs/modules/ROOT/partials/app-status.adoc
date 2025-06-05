@@ -1,0 +1,8 @@
+[%autowidth]
+|===
+|App |Status |Message
+
+|{status-charm}
+|{status-type}
+|{status-message}
+|===

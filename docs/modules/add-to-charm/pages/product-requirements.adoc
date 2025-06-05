@@ -1,0 +1,5 @@
+= 4. Product requirements
+:page-pagination: sibling
+:page-noindex:
+
+include::ROOT:partial$product-requirements.adoc[]

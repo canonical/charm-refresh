@@ -1,0 +1,25 @@
+= 13. (Optional) Increase httpx logger level
+:reftext: 13. Increase httpx logger level
+:page-pagination: sibling
+
+charm-refresh uses httpx (which depends on httpcore).
+
+httpx and httpcore have noisy DEBUG and INFO level logs.
+
+Consider adding this code after the imports in the charm entrypoint (typically src/charm.py):
+
+[,python]
+----
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+----
+
+.Example charm.py
+[,python]
+----
+import logging
+
+logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+----

@@ -1,0 +1,45 @@
+= 26. Check in_progress
+:page-pagination: sibling
+
+[#which-operations]
+== Operations to run while in progress
+
+While a refresh is in progress, the application is in a vulnerable state and (while units restart) performance may be degraded.
+Also, it is important that the user is able to quickly rollback at any time while a refresh is in progress.
+
+With this in mind, some operations should be forbidden while a refresh is in progress--because they could be dangerous, because they are non-essential, or because they could slow down a rollback.
+
+Examples of operations that might be forbidden (depends on the workload; these examples might be incorrect for some workloads):
+
+* Creating a backup
+* Restoring a backup
+* Rotating passwords/certificates
+* Changing config options
+
+At the same time, the application must:
+
+[.excerpt,,'xref:product-requirements.adoc[]']
+____
+include::ROOT:partial$product-requirements.adoc[tag=high-availability]
+____
+
+Therefore, the charm code must handle critical operations while a refresh is in progress.
+For example:
+
+* IP address changes
+* Scaling the application up or down
+
+[#check-value]
+== Check if a refresh is in progress
+
+.Example
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    refresh: charm_refresh.Common
+
+    def _restore_backup(self, event: ops.ActionEvent):
+        if self.refresh.in_progress:
+            event.fail("Refresh in progress")
+            return
+----

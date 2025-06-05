@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 concurrency:
   # Prevent race conditions (if multiple commits have been pushed since the last release)
@@ -22,12 +23,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Checkout history with git tags
+          fetch-depth: 0  # Checkout history with git tags & all branches
       - name: Install CLI
         run: pipx install .github/workflows/_cli/
-      - name: Create release tag
+      - name: Create release tag & create branch for last minor version & update antora-main- tag
         id: create-tag
-        run: create-version-tag
+        run: create-version-tag-and-branch --branch-name='${{ github.ref_name }}'
     outputs:
       tag: ${{ steps.create-tag.outputs.tag }}
     permissions:
@@ -58,10 +59,19 @@ jobs:
     outputs:
       artifact-name: python-package-distributions
 
+  release-docs:
+    name: Release docs to Read the Docs
+    needs:
+      - tag
+    uses: canonical/charm-refresh/.github/workflows/release_docs.yaml@docs-playbook
+    secrets:
+      readthedocs-token: ${{ secrets.READTHEDOCS_TOKEN }}
+
   release-trusted-publishing:
     name: Release to PyPI (trusted publishing)
     needs:
       - build
+      - release-docs
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production

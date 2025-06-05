@@ -12,7 +12,7 @@ dependencies = [
 
 [project.scripts]
 check-pr-title = "cli.check_version_prefix:check_pr_title"
-create-version-tag = "cli.create_version_tag:main"
+create-version-tag-and-branch = "cli.create_version_tag_and_branch:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

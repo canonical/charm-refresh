@@ -1,0 +1,10 @@
+name: ROOT
+title: charm-refresh
+version:
+  # Extract version from "antora-main-*" tag
+  # Used as a workaround to set this component's version on the main branch without hard-coding the
+  # version in the files on the main branch or in the Antora playbook
+  'antora-main-(?<refresh>+({0..9})).(?<major>+({0..9})).(?<minor>+({0..9}))': '$<refresh>.$<major>.$<minor>'
+  # Antora will fall back to refname as version if the refname does not match a pattern above
+nav:
+  - modules/ROOT/nav.adoc

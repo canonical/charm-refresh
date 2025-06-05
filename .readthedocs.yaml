@@ -1,0 +1,16 @@
+# This .readthedocs.yaml file is only used to enable pull request previews. It is not used to
+# publish the production documentation website.
+# (The .readthedocs.yaml file on the docs-playbook branch is used to publish the production
+# documentation website.)
+version: 2
+build:
+  os: ubuntu-lts-latest
+  tools:
+    # Use latest LTS
+    nodejs: "22"
+  jobs:
+    build:
+      html:
+        - git fetch origin docs-playbook
+        - git checkout FETCH_HEAD
+        - ./build-pr-preview.sh

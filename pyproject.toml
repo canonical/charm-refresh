@@ -5,6 +5,10 @@ description = "In-place rolling refreshes of stateful charmed applications "
 authors = ["Carl Csaposs <carl.csaposs@canonical.com>"]
 readme = "README.md"
 
+[tool.poetry.urls]
+documentation = "https://canonical-charm-refresh.readthedocs-hosted.com/"
+repository = "https://github.com/canonical/charm-refresh"
+
 [tool.poetry.dependencies]
 python = ">=3.8"
 packaging = ">=24.1"

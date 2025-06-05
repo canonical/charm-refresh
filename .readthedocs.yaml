@@ -1,0 +1,29 @@
+# Changes to this file should also be applied to .readthedocs.yaml on all actively maintained
+# source code/documentation content branches. (.readthedocs.yaml on those branches is used to
+# enable pull request previews)
+
+# This .readthedocs.yaml file is used to publish the production documentation website.
+
+# Traditionally, Read the Docs is configured to use a separate build for each version of the
+# documentation. Antora uses a different paradigm—Antora is responsible for collecting multiple
+# versions for each of the components and combining them into a single site. Therefore, in this
+# configuration, a single Read the Docs build contains all versions of the documentation.
+
+# That build (for the production documentation website) is triggered in two ways:
+# - changes (commits) to the branch containing the Antora playbook (this branch)
+#   (The build is automatically triggered by Read the Docs because of the presence of this
+#   .readthedocs.yaml file)
+# - changes (commits) to any of the documentation content branches (i.e. "content.sources" in the
+#   Antora playbook)
+#   (The build is manually triggered using a GitHub Actions workflow [release_docs.yaml] that
+#   requests a rebuild of the Antora playbook branch)
+version: 2
+build:
+  os: ubuntu-lts-latest
+  tools:
+    # Use latest LTS
+    nodejs: "22"
+  jobs:
+    build:
+      html:
+        - ./build.sh

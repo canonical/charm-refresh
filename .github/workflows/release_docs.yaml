@@ -1,0 +1,73 @@
+# Manually trigger Read the Docs build via API
+
+# Traditionally, Read the Docs is configured to use a separate build for each version of the
+# documentation. Antora uses a different paradigm—Antora is responsible for collecting multiple
+# versions for each of the components and combining them into a single site. Therefore, in this
+# configuration, a single Read the Docs build contains all versions of the documentation.
+
+# Without this workflow, a Read the Docs build would only be triggered on changes (commits) to the
+# branch containing the Antora playbook (this branch).
+
+# This workflow triggers a Read the Docs build on any change (commit) to one of the documentation
+# content branches (i.e. "content.sources" in the Antora playbook)
+
+on:
+  # Called by PyPI release workflow on documentation content branches
+  workflow_call:
+    secrets:
+      readthedocs-token:
+        description: Read the Docs API token
+        required: true
+  # Documentation is already released on push (to the docs-playbook branch) because of the
+  # .readthedocs.yaml file
+
+jobs:
+  release-docs:
+    name: Release docs to Read the Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Release documentation
+        shell: python
+        run: |
+          import os
+          import time
+
+          import requests
+
+          repository_name = "${{ github.repository }}".removeprefix("${{ github.repository_owner }}/")
+          headers = {"Authorization": f"Token {os.environ['READTHEDOCS_TOKEN']}"}
+
+          # Trigger build
+          response = requests.post(
+              f"https://readthedocs.com/api/v3/projects/canonical-{repository_name}/versions/latest/builds/",
+              headers=headers,
+          )
+          response.raise_for_status()
+          data = response.json()
+          build_id = data["build"]["id"]
+          print(f"Build started: {data['build']['urls']['build']}")
+
+          # Wait for build to complete
+          while True:
+              time.sleep(5)
+              response = requests.get(
+                  f"https://readthedocs.com/api/v3/projects/canonical-{repository_name}/versions/latest/builds/{build_id}/",
+                  headers=headers,
+              )
+              response.raise_for_status()
+              data = response.json()
+              result = data["success"]
+              if result is None:
+                  # Build is still in progress
+                  continue
+              elif result is True:
+                  print("Build succeeded")
+                  break
+              elif result is False:
+                  print(f"Build failed: {data['urls']['build']}")
+                  exit(1)
+              else:
+                  raise TypeError
+        env:
+          READTHEDOCS_TOKEN: ${{ secrets.readthedocs-token }}

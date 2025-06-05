@@ -1,0 +1,6 @@
+# docs-playbook branch
+/node_modules/
+/package-lock.json
+/build/
+
+/poetry.lock

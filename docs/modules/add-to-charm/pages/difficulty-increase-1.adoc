@@ -1,0 +1,5 @@
+= Difficulty increase
+:page-pagination: sibling
+:page-noindex:
+
+The next steps are significantly more difficult and nuanced than the previous steps.

@@ -1,0 +1,66 @@
+= 6. Public interface
+:page-pagination: sibling
+
+Any usage of charm-refresh that is not *explicitly* documented as supported is *subject to breaking changes in any release*.
+
+This documentation website is the sole reference for which usages of charm-refresh are supported.
+
+NOTE: Check that the version of the documentation website you're currently viewing ({page-component-display-version}) matches the version of charm-refresh you're using
+
+Examples of usages that are (currently) not supported include, but are not limited to:
+
+* Subclassing `charm_refresh.Common`, `charm_refresh.Kubernetes`, or `charm_refresh.Machines`
+* Charms with more than one workload
+* Modifying charm-refresh's Juju actions, action parameters, or config options
+* Using a Python object whose name begins with an underscore
+* Changing the behavior of charm-refresh-build-version in charmcraft.yaml
+* Suppressing charm-refresh's INFO level logs
+* Reading data from or writing data to charm-refresh's peer relation databags
+
+[#use-case-not-documented]
+== My use case is not explicitly documented as supported
+
+If you have a use case that you would like charm-refresh to support:
+
+. xref:ROOT:contact.adoc[]
+. We will discuss to understand your use case, research if others have a similar need, and try to find a reusable solution that we can support in charm-refresh
+. If we decide to support your use case:
+** We will update the documentation to explicitly state that your use case is supported
+. If we decide not to support your use case:
+** We will provide you with our recommendation for how you might implement your use case outside of charm-refresh
+** We may reconsider supporting your use case in the future
+
+This process (of requiring all supported use cases to be explicitly documented) enables:
+
+* the maintainers of charm-refresh to provide better backwards compatibility
+** We must be aware of (and understand the details of) the use cases in order to ensure we do not break those use cases
+* dependents of charm-refresh to standardize their approach, design, and implementation--to the extent possible
+** When it makes sense, standardization leads to greater reliability (from more people testing & reporting bugs), easier knowledge transfer (e.g. pair debugging), and less maintenance work for everyone overall
+
+Please do not hesitate to xref:ROOT:contact.adoc[contact us]!
+We are here to support you.
+
+[#versioning]
+== Versioning scheme
+// TODO move out of this page
+
+charm-refresh uses a version format of W.X.Y.Z
+
+The X.Y.Z part is effectively a https://semver.org/[semantic version].
+
+* W is incremented for changes that break refresh from or rollback to the previous W.* versions
+** For example, if a change breaks refresh from or rollback to v2.0.0.1--even if it does not break refresh from or rollback to v2.1.3.5--W will be incremented to 3
+* X is incremented for backwards incompatible changes to the public interface (that do not break refresh)
+* Y is incremented for backwards compatible changes to the public interface
+* Z is incremented for changes that do not affect the public interface
+
+If W > 0, the public interface is stable.
+(The semantic version rules that normally apply when X == 0 should only be applied here when W == 0.)
+
+When W is incremented, X, Y, and Z must be reset to 0.
+
+CAUTION: charm-refresh should not be downgraded.
+W is only incremented if refresh from or _rollback_ to the previous W.* versions is broken.
+Refresh _to_ a previous charm-refresh version (downgrade) is not supported
+
+// TODO add history section with v1 and v2 info

@@ -1,0 +1,16 @@
+= User experience
+
+NOTE: Check that the version of the documentation website you're currently viewing ({page-component-display-version}) matches the version of charm-refresh you'd like to view the user experience for
+
+Description of how the user interacts with and experiences an in-place refresh of a single Juju application via:
+
+* xref:user-experience/config.adoc[]
+* xref:user-experience/status.adoc[]
+** This page also includes some log messages that are directly referenced by status messages and/or that directly reference actions. Most log messages are not documented
+* xref:user-experience/actions.adoc[]
+
+The user experience is constrained by xref:juju-refresh.adoc[] and satisfies the xref:product-requirements.adoc[].
+
+The primary purpose of this part of the documentation is to enable engineering managers and product managers to review and approve user experience changes without needing to review the source code directly.
+
+A secondary purpose is to enable charm developers to understand how decisions in their charm code implementation impact the user's experience.

@@ -1,0 +1,143 @@
+= 29. Implement CharmSpecific pre-refresh checks & preparations
+:reftext: 29. Implement pre-refresh checks
+:page-pagination: sibling
+
+[TIP]
+====
+For the purpose of testing what you have implemented in the previous steps (and fixing any immediately visible mistakes before proceeding), this step may be temporarily skipped.
+
+This step must be implemented before the charm is released.
+
+To temporarily skip this step, add this method to your CharmSpecific class:
+
+.Example
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    def run_pre_refresh_checks_after_1_unit_refreshed(self) -> None:
+        # TODO: implement pre-refresh checks & preparations before merging or release
+        pass
+----
+
+For a charm with a Kubernetes variant & a machine variant that share code, add the method to your class that inherits directly from charm_refresh.CharmSpecificCommon.
+
+Set a reminder to ensure that you implement this step before the charm is released
+====
+
+Before the refresh starts, the charm code must:
+
+* ensure that the application and each unit are healthy
+* ensure that no operations are running that xref:in-progress.adoc#which-operations[would be dangerous to run while a refresh is in progress]
+* ensure that the necessary precautions to avoid data loss and reduce downtime--in the event that the refresh irrecoverably fails and in-place rollback is not possible--have been taken (e.g. a recent backup has been created & the backup is valid)
+* perform preparations (e.g. switch primary to the lowest number unit) to minimize downtime and ensure that rollback will be possible at any time while the refresh is in progress
+
+include::partial$charm-specific-class.adoc[]
+
+[#situations]
+== When the checks & preparations are run
+
+There are three situations in which the pre-refresh health checks & preparations run:
+
+// List items are referenced by number; update references if numbering changes
+1. When the user runs the `pre-refresh-check` action on the leader unit before the refresh starts
+2. On machines, after `juju refresh` and before any unit is refreshed, the highest number unit automatically runs the checks & preparations
+3. On Kubernetes; after `juju refresh`, after the highest number unit refreshes, and xref:workload-allowed-to-start.adoc[before the highest number unit starts its workload]; the highest number unit automatically runs the checks & preparations
+
+Note that:
+
+* In situation #1 the checks & preparations run on the old charm code and in situations #2 and #3 they run on the new charm code
+* In situations #2 and #3, the checks & preparations run on a unit that may or may not be the leader unit
+* In situation #3, the highest number unit's workload is offline
+* Before the refresh starts, situation #1 is not guaranteed to happen
+* Before the refresh starts, situation #1 may happen multiple times
+* Situation #2 or #3 (depending on machines or Kubernetes) will happen regardless of whether the user ran the `pre-refresh-check` action
+* In situations #2 and #3, if the user scales up or down the application before all checks & preparations are successful, the checks & preparations will run on the new highest number unit.
++
+If the user scaled up the application:
+
+** In situation #3, multiple units' workloads will be offline
+** In situation #2, the new units may install the new snap version before the checks & preparations succeed
+* In situations #2 and #3, after all checks & preparations are successful, they will not run again unless the user runs `juju refresh`.
+Exception: in rare cases, they may run again if the user scales down the application.
+* In situation #1, the user may decide not to refresh the application even if all checks & preparations were successful
+
+Checks & preparations will not run during a rollback.
+
+[#ordering]
+== How to order checks & preparations
+
+Checks & preparations are run sequentially.
+Therefore, it is recommended that:
+
+* Checks (e.g. backup created) should be run before preparations (e.g. switch primary)
+* More critical checks should be run before less critical checks
+* Less impactful preparations should be run before more impactful preparations
+
+However, if any checks or preparations fail and the user runs the `force-refresh-start` action with `run-pre-refresh-checks=false`, the remaining checks & preparations will be skipped (more info: xref:ROOT:user-experience.adoc[]){emdash}this may impact how you decide to order the checks & preparations.
+
+[#which-method]
+== Where to place a check/preparation
+
+If possible, pre-refresh checks & preparations should be written to support all 3 situations.
+
+If a pre-refresh check/preparation supports all 3 situations, it should be placed in the `run_pre_refresh_checks_after_1_unit_refreshed` method and called by the `run_pre_refresh_checks_before_any_units_refreshed` method.
+
+Otherwise, if it does not support situation #3 but does support situations #1 and #2, it should be placed in the `run_pre_refresh_checks_before_any_units_refreshed` method.
+
+By default (i.e. if your CharmSpecific class(es) do not define the `run_pre_refresh_checks_before_any_units_refreshed` method), the `run_pre_refresh_checks_before_any_units_refreshed` method will call the `run_pre_refresh_checks_after_1_unit_refreshed` method.
+
+[#implement-methods]
+== Implement CharmSpecific methods
+
+.Example
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    def run_pre_refresh_checks_after_1_unit_refreshed(self) -> None: # <.>
+        if self._charm._patroni.is_creating_backup:
+            raise charm_refresh.PrecheckFailed("Backup in progress")
+
+    def run_pre_refresh_checks_before_any_units_refreshed(self) -> None: # <.>
+        self.run_pre_refresh_checks_after_1_unit_refreshed()
+
+        if not self._charm._patroni.are_all_members_ready():
+            raise charm_refresh.PrecheckFailed(
+                "{ex-workload} is not running on 1+ units"
+            )
+----
+<.> Implement checks & preparations that support all 3 situations in this method
+<.> Implement checks & preparations that only support situation #1 and #2 in this method.
++
+Ensure that `run_pre_refresh_checks_after_1_unit_refreshed` is called in this method.
++
+If all checks & preparations support all 3 situations, this method can be omitted.
+(The default implementation of this method calls `run_pre_refresh_checks_after_1_unit_refreshed`.)
+
+[#implement-check]
+== Implement a check/preparation
+
+If a check or preparation fails, raise the `charm_refresh.PrecheckFailed` exception.
+
+NOTE: If a check or preparation fails, all of the checks & preparations may be run again on the next Juju event
+
+`PrecheckFailed` requires a single positional argument for a short, descriptive message that explains to the user which health check or preparation failed.
+For example: "Backup in progress".
+
+This message will be shown to the user in the output of `juju status`, refresh actions, and `juju debug-log`.
+More info: xref:ROOT:user-experience.adoc[]
+
+Messages longer than 64 characters will be truncated in the output of `juju status`.
+It is recommended that messages are +<=+ 64 characters.
+
+Do not mention "pre-refresh check" or prompt the user to rollback in the message--that information will already be included alongside the message.
+
+.Example
+[,python]
+----
+if self._charm._patroni.is_creating_backup:
+    raise charm_refresh.PrecheckFailed("Backup in progress")
+----
+
+TIP: The implementation of a pre-refresh check or preparation may require you to xref:add-charm-specific-fields.adoc[]

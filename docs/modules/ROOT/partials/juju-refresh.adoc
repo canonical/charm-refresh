@@ -1,0 +1,106 @@
+This page describes the behavior of Juju and Kubernetes after the user runs `juju refresh`.
+These are the constraints in which the xref:./product-requirements.adoc[] are implemented.
+
+[#kubernetes]
+== Kubernetes
+
+On Kubernetes, each Juju application is a https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/[StatefulSet] configured with the https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#rolling-updates[`RollingUpdate` update strategy].
+Each Juju unit is a https://kubernetes.io/docs/concepts/workloads/pods/[Pod].
+
+When the user runs `juju refresh`, Juju updates the application's StatefulSet.
+
+Then:
+
+. Kubernetes https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination[sends a SIGTERM signal] to the pod with the highest https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#ordinal-index[ordinal] (unit number)
+
+. Juju emits a {url-juju-docs}/reference/hook/#stop[stop event] on the unit
+
+. After the unit processes the stop event *or* after the pod's `terminationGracePeriodSeconds` have elapsed, whichever comes first, Kubernetes deletes the pod
+** `terminationGracePeriodSeconds` is set to 30 seconds as of Juju 3.3 (300 seconds in Juju +<=3.2+).
+It is https://chat.charmhub.io/charmhub/pl/i4czczen7f8i9cecdzpfmazs6a[not recommended] for charms to patch this value.
+Details: https://bugs.launchpad.net/juju/+bug/2035102
+
+. Kubernetes re-creates the pod using the updated StatefulSet
+** This refreshes the unit's charm code and container image(s) (i.e. workload(s))
+
+. Juju emits an {url-juju-docs}/reference/hook/#upgrade-charm[upgrade-charm event] on the unit
+** Note: Receiving an upgrade-charm event does not guarantee that a unit has refreshed.
+If, at any time, a pod is deleted and re-created, Juju may emit an upgrade-charm event on that unit.
+Details: https://bugs.launchpad.net/juju/+bug/2021891
+
+. After the https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-probes[readiness probe] succeeds on all of the pod's containers, the previous steps are repeated for the pod with the next highest ordinal
+** For the containers of a Juju unit, https://documentation.ubuntu.com/pebble/reference/health-checks/#health-endpoint[pebble's health endpoint] is used for the readiness probe
+** For the workload container, by default (i.e. if no pebble health checks are configured), pebble will always succeed the probe
+** For the charm container, a pebble health check is configured to query the Juju agent.
+After every restart of the charm container, the Juju agent will fail the pebble health check until after the unit successfully executes the {url-juju-docs}/reference/hook/#start[start event].
++
+However, https://documentation.ubuntu.com/pebble/reference/health-checks/#options[by default], a pebble health check needs to fail 3 times before pebble will fail the Kubernetes readiness probe.
++
+More info: https://warthogs.atlassian.net/browse/DPE-5934, https://github.com/juju/juju/issues/19672
+
+Charms can interrupt this process by setting the https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions[`RollingUpdate` partition].
+
+[.excerpt,,'https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions']
+____
+If a partition is specified, all Pods with an ordinal that is greater than or equal to the partition will be updated when the StatefulSet's `.spec.template` is updated.
+All Pods with an ordinal that is less than the partition will not be updated, and, even if they are deleted, they will be recreated at the previous version.
+____
+
+[NOTE]
+====
+If the partition is lowered, a pod is updated, the partition is raised above that pod's ordinal, and that pod is deleted, it will be recreated at the old version.
+
+If that pod was not deleted, it would continue running on the new version
+====
+
+For example, in a 3-unit Juju application (unit numbers: 0, 1, 2), as unit 2's pod is being deleted, the charm can set the partition to 2.
+Unit 2 will refresh but units 1 and 0 will not.
+Then, after the charm verifies that all units are healthy, it can set the partition to 1 and unit 1 will refresh.
+
+Note: after the user runs `juju refresh`, the charm cannot prevent refresh of the highest number unit.
+
+CAUTION: Charms should not set the partition greater than the highest unit number.
+If they do, `juju refresh` will not trigger any {url-juju-docs}/reference/hook/[Juju events]
+
+WARNING: During rollback, all pods--even those that have not refreshed--will be deleted (workload will restart).
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2036246
+
+IMPORTANT: If the charm container of a pod (unit) with an outdated (workload, charm code, or ControllerRevision) version is restarted (e.g. because the pod is https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/[evicted]), the unit will not receive any Juju events.
+If the workload container was also restarted (e.g. because the pod was evicted), the workload will likely not start.
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2073506
+
+NOTE: Outdated units will not receive config-changed events.
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2084886
+
+[#machines]
+== Machines
+
+After the user runs `juju refresh`, for each unit of the Juju application:
+
+NOTE: If the unit failed to execute the last event (raised uncaught exception), Juju may retry that event.
+Then, Juju will refresh the unit's charm code without emitting an upgrade-charm event on that unit.
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2068500
+
+. If the unit is currently executing another event, Juju https://matrix.to/#/!xzmWHtGpPfVCXKivIh:ubuntu.com/$firps4AV5YInSDQh4izbPTZ0B0e0QwAbQVMaURT0T3o?via=ubuntu.com&via=matrix.org&via=fsfe.org[waits for the unit to finish executing that event]
+. Juju refreshes the unit's charm code
+. Juju emits an {url-juju-docs}/reference/hook/#upgrade-charm[upgrade-charm event] on that unit
+
+This process happens concurrently and independently for each unit.
+For example, if one unit is executing another event, that will not prevent Juju from refreshing other units' charm code.
+
+Refreshing the workload(s) (e.g. snap or apt packages) is left to the charm.
+
+[#differences-kubernetes-machines]
+== Key differences between Kubernetes and machines
+
+On Kubernetes, the charm code and workload are refreshed at the same time (for a unit).
+On machines, they are refreshed at different times.
+
+On Kubernetes, while a refresh is in progress, units will have different charm code versions.
+The leader unit may have the old or new charm code version.
+
+On machines, while a refresh is in progress, the charm code version may be out of sync with the workload version.
+(For example, if the charm code is written for workload version B, it may not know how to operate workload version A [e.g. to maintain high availability].)
+
+After `juju refresh`, on machines, the charm can prevent workload refresh (e.g. if the new version is incompatible) for all units.
+On Kubernetes, the charm cannot prevent workload refresh of the highest number unit.

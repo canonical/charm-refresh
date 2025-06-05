@@ -1,0 +1,82 @@
+= 5. Backwards compatibility consequences
+:page-pagination: sibling
+
+As soon as in-place refreshes are added to a charm, all future changes to the charm release (which includes charm code, charm code dependencies, charm metadata, workload, workload dependencies, workload packaging, etc.) are significantly restricted.
+
+[.excerpt,,'xref:product-requirements.adoc[]']
+____
+include::ROOT:partial$product-requirements.adoc[tag=track-compatibility]
+____
+
+All changes must be backwards-compatible with all previous stable versions of the charm.
+Furthermore, all changes must support safe rollback.
+
+// TODO add link to "change charm code or deps" page
+
+[#before-stable]
+== Review existing code
+
+Before the first stable release of the charm that includes charm-refresh:
+
+* Make any backwards-incompatible changes--that you had planned to make in the future--now
+* Remove or refactor things that are likely to make backwards-compatible changes more difficult in the future
+
+.Example
+****
+Suppose your charm code (or one of your charm code dependencies) validates the keys and values stored in a relation databag.
+
+.Original charm code version
+[,python]
+----
+def is_valid(databag: collections.abc.Mapping):
+    allowed_types_by_key = {
+        "timestamp": int,
+        "name": str,
+    }
+
+    for key, value in databag.items():
+        if key not in allowed_types_by_key:
+            # Unknown key
+            return False
+        if not isinstance(value, allowed_types_by_key[key]):
+            # Incorrect type
+            return False
+    return True
+----
+
+In the future, you add a new key `id` to the databag.
+And you update `is_valid`.
+
+.New charm code version
+[,python]
+----
+    allowed_types_by_key = {
+        "timestamp": int,
+        "name": str,
+        "id": int,
+    }
+----
+
+The user refreshes from the original charm to the new version.
+The first unit refreshes and sets the new `id` key in its unit databag.
+The validation passes.
+
+However, the user rolls back the charm.
+
+Now, on the unit that refreshed, `id` is set in the databag, but the original charm code version is running.
+The unit raises an error since, according to its code, the databag is invalid.
+
+Because of the way the original charm code was written, adding the `id` key to the databag was a backwards-incompatible change.
+To make this change backwards-compatible, significant complexity will need to be added to the new charm code version.
+
+This situation would have been avoided entirely if the original charm code only validated the keys it knew about and did not validate the non-existence of keys it did not know about.
+Then, this change would have been backwards-compatible and simple to implement.
+
+'''
+
+There are a number of cases that are similar to this example--where a little bit of forethought can make future backwards compatibility much easier.
+
+Also, this example is relatively simple.
+There are other situations where it is much harder or impossible to make a change backwards-compatible if the original charm code was not thoughtfully designed for backwards-compatibility.
+
+****

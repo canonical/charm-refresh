@@ -1,0 +1,37 @@
+= Config options
+
+[#pause-after-unit-refresh]
+== pause_after_unit_refresh
+
+.config.yaml
+[,yaml]
+----
+include::add-to-charm:example$config.yaml[]
+----
+
+If a refresh is not in progress, changing this value will have no effect until the next refresh.
+
+If a refresh is in progress, changes to this value will take effect before the next unit refreshes.
+(Any units that are refreshing when the value is changed will finish refreshing.)
+
+Example 1:
+
+* 4-unit Juju application
+** Unit 0: v1
+** Unit 1: v1
+** Unit 2: v2
+** Unit 3: v2
+* `pause_after_unit_refresh` changed from `all` to `first`
+* Unit 1 will immediately refresh.
+If it is healthy after refreshing, unit 0 will refresh
+
+Example 2:
+
+* 4-unit Juju application
+** Unit 0: v1
+** Unit 1: refreshing from v1 to v2
+** Unit 2: v2
+** Unit 3: v2
+* `pause_after_unit_refresh` changed from `none` to `all`
+* Unit 1 will finish refreshing to v2.
+After that, no units will refresh until the user runs the xref:user-experience/actions.adoc#resume-refresh[resume-refresh action] or runs `juju refresh` (e.g. to rollback)

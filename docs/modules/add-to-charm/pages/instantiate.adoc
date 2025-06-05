@@ -1,0 +1,7 @@
+= 18. Instantiate refresh class
+:page-pagination: sibling
+
+* xref:instantiate/kubernetes.adoc[]
+* xref:instantiate/machines.adoc[]
+
+For a repository that contains both a Kubernetes charm and a machine charm, follow the individual instructions for each charm.

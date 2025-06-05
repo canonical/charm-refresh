@@ -1,0 +1,9 @@
+[%autowidth,cols=",,>,"]
+|===
+|App |Status |Rev |Message
+
+|{status-charm}
+|{status-type}
+|{status-rev}
+|{status-message}
+|===

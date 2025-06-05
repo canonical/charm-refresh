@@ -1,0 +1,158 @@
+= 25. Allow next unit to refresh
+:page-pagination: sibling
+
+In the same Juju event after (Kubernetes) xref:workload-allowed-to-start.adoc[the workload has been allowed to start] or (machines)  xref:refresh-snap.adoc[the snap has been refreshed], the charm code must attempt to:
+
+// List items are referenced by number; update references if numbering changes
+1. Start the workload
+2. Check if the application and the unit are healthy
+3. If they are both healthy, set `next_unit_allowed_to_refresh = True`
+
+If `next_unit_allowed_to_refresh` is not set to `True` (#3) (because
+
+* starting the workload [#1] failed,
+* checking if the application and the unit were healthy [#2] failed,
+* either the application or unit was unhealthy in #2,
+* or the charm code raised an uncaught exception later in the same Juju event
+
+), then the charm code must retry #1-#3, as applicable, in *every Juju event* until `next_unit_allowed_to_refresh` is set to `True` and an uncaught exception is not raised by the charm code later in the same Juju event.
+
+NOTE: "Every Juju event" includes Juju events that the charm code may not currently https://ops.readthedocs.io/en/latest/reference/ops.html#ops.Framework.observe[observe]
+
+If #2 fails or if either the application or the unit is unhealthy in #2, the charm code must set a unit status to indicate what is unhealthy.
+
+The `next_unit_allowed_to_refresh` attribute can be read to determine if (any part of) #1-#3 must be retried.
+It must only be read for that purpose.
+
+`next_unit_allowed_to_refresh` can only be set to `True`.
+When the unit is refreshed, `next_unit_allowed_to_refresh` will be automatically reset to `False`.
+
+.pause_after_unit_refresh config option
+****
+next_unit_allowed_to_refresh is different from the pause_after_unit_refresh user configuration option.
+
+next_unit_allowed_to_refresh is set to True by the charm code after the charm code's automatic health checks succeed.
+
+If next_unit_allowed_to_refresh is not set to True, the refresh will pause and the next unit will not refresh, regardless of the value of the pause_after_unit_refresh config option.
+
+Exception: The user can manually override failing automatic health checks (i.e. next_unit_allowed_to_refresh not being set to True) by running the `resume-refresh` action with `check-health-of-refreshed-units=false`.
+
+After next_unit_allowed_to_refresh is set to True, the value of the pause_after_unit_refresh config option determines whether the next unit will automatically begin to refresh or if the user will need to run the `resume-refresh` action to refresh the next unit.
+
+For example:
+
+* If next_unit_allowed_to_refresh is set to True and pause_after_unit_refresh is set to "all", the next unit will not refresh until the user runs the `resume-refresh` action
+* If pause_after_unit_refresh is set to "none" and next_unit_allowed_to_refresh is not set to True, the next unit will not refresh until next_unit_allowed_to_refresh is set to True
+
+'''
+
+Any health check that can be automated should be automated.
+And it should succeed before next_unit_allowed_to_refresh is set to True.
+
+pause_after_unit_refresh is intended only for manual health checks that cannot be automated in the charm code (e.g. that all clients are healthy, that traffic patterns look normal, that performance is acceptable, etc.).
+
+pause_after_unit_refresh may be configured to "none", so the automatic health checks alone must be sufficient to ensure that it is (reasonably) safe to proceed with the refresh.
+
+More info: xref:ROOT:user-experience.adoc[]
+****
+
+[#kubernetes]
+== Kubernetes
+
+The charm code must first execute #1-#3 in the first Juju event where `workload_allowed_to_start` is `True`.
+
+.Example
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def reconcile(self, event):
+        if self.refresh.workload_allowed_to_start:
+            ensure_workload_service_is_enabled()
+            if not self.refresh.next_unit_allowed_to_refresh:
+                try:
+                    ensure_application_and_unit_are_healthy()
+                except Unhealthy as exception:
+                    self.unit.status = ops.BlockedStatus(exception.reason)
+                else:
+                    self.refresh.next_unit_allowed_to_refresh = True
+----
+
+[#machines]
+== Machines
+
+After the snap is successfully refreshed, refresh_snap will not be called again on the unit (until the next `juju refresh` [e.g. rollback]).
+
+[NOTE]
+====
+This is true even if the charm code raised an uncaught exception in the same Juju event where the snap was successfully refreshed.
+
+Also (unlike `next_unit_allowed_to_refresh`), `refresh.update_snap_revision()` does not need to be called again if an uncaught exception was raised after it was called
+====
+
+However, even if the snap was successfully refreshed, #1-#3 (on this page) still must be retried until `next_unit_allowed_to_refresh` is set to `True` and an uncaught exception is not raised by the charm code later in the same Juju event.
+
+There are two common approaches to accomplish this:
+
+* For charm code with an event handler that is executed for every Juju event, add #1-#3 to that event handler
++
+--
+.Example
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def reconcile(self, event): # <.>
+        ensure_workload_service_is_enabled()
+        try:
+            ensure_application_and_unit_are_healthy()
+        except Unhealthy as exception:
+            self.unit.status = ops.BlockedStatus(exception.reason)
+        else:
+            self.refresh.next_unit_allowed_to_refresh = True
+----
+<.> Event handler that is executed for every Juju event
+
+During the Juju event that the snap is refreshed in, the event handler must be executed
+--
+
+* Create a method (e.g. `post_snap_refresh`) that runs in refresh_snap and is retried as needed in the `ops.CharmBase` `+__init__+` method
++
+.Example
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-vm}(charm_refresh.CharmSpecificMachines):
+    def refresh_snap(
+        self,
+        *,
+        snap_name: str,
+        snap_revision: str,
+        refresh: charm_refresh.Machines,
+    ) -> None:
+        # [...] <.>
+
+        self._charm.post_snap_refresh(refresh)
+
+class {ex-charm-class}(ops.CharmBase):
+    def post_snap_refresh(self, refresh: charm_refresh.Machines):
+        ensure_workload_service_is_enabled()
+        try:
+            ensure_application_and_unit_are_healthy()
+        except Unhealthy as exception:
+            self.unit.status = ops.BlockedStatus(exception.reason)
+        else:
+            self.refresh.next_unit_allowed_to_refresh = True
+
+    def __init__(self, *args):
+        # [...]
+        self.refresh = charm_refresh.Machines(
+            # [...]
+        )
+        # [...]
+
+        if not self.refresh.next_unit_allowed_to_refresh:
+            if self.refresh.in_progress:
+                self.post_snap_refresh(self.refresh)
+            else:
+                self.refresh.next_unit_allowed_to_refresh = True
+----
+<.> Implemented in xref:refresh-snap.adoc[]

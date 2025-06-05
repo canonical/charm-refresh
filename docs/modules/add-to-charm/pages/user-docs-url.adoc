@@ -1,0 +1,47 @@
+= 31. Set up URL redirect to user docs
+:page-pagination: sibling
+
+In the output of the `pre-refresh-check` action, charm-refresh will display a URL to the charm's user documentation for in-place refreshes.
+More info: xref:ROOT:user-experience.adoc[]
+
+[#format]
+== URL format
+
+charm-refresh will generate the URL using this format:
+
+----
+https://charmhub.io/{charm_name}/docs/refresh/{charm_version}
+----
+
+`+{charm_name}+` will be replaced with the value of `charm_name` from xref:instantiate.adoc[].
+
+// TODO link to charm code compatibility version
+`+{charm_version}+` will be replaced with the charm compatibility version of the charm code that the `pre-refresh-check` action is run on (i.e. the charm code version that the user will be refreshing from).
+The `/` character in the charm compatibility version will not be URL-encoded.
+
+.Example URL
+[subs="+attributes"]
+----
+https://charmhub.io/{ex-charm}/docs/refresh/{ex-charm-version}
+----
+
+[#target]
+== Redirect target
+
+This URL must be redirected to user documentation that provides instructions for how to refresh from this version (e.g. {ex-charm-version}) to all versions that support refreshing from that version.
+
+NOTE: At the time this version (e.g. {ex-charm-version}) is released, it will not be possible to know all of the future versions that will support refreshing from that version
+
+[#redirect]
+== Set up redirect
+
+[#community]
+=== Community charm developers
+
+xref:ROOT:contact.adoc[] and we will assist you with creating the redirect
+
+[#canonical-staff]
+=== Canonical staff
+
+// TODO replace with docs on process
+Contact @avgomes, @carlcsaposs, or @taurus on Mattermost to set up the redirect

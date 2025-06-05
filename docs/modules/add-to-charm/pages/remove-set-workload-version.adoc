@@ -1,0 +1,15 @@
+= 14. Remove set_workload_version calls
+:page-pagination: sibling
+
+Remove all calls to https://ops.readthedocs.io/en/latest/reference/ops.html#ops.Unit.set_workload_version[ops' `set_workload_version`].
+
+.Example set_workload_version call
+[,diff]
+----
+-    def _on_workload_container_pebble_ready(self, _):
+-        self.unit.set_workload_version(self.get_workload(event=None).version)
+----
+
+Remove all calls (if any) to {url-juju-docs}/reference/hook-command/list-of-hook-commands/application-version-set/[Juju's `application-version-set` command].
+
+NOTE: Remove calls from both the charm code and the charm code dependencies (except charm-refresh)

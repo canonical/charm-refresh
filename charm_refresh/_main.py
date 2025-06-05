@@ -46,11 +46,11 @@ class CharmVersion:
     """
 
     def __init__(self, version: str, /):
-        # Example 1: "14/1.12.0"
-        # Example 2: "14/1.12.0.post1.dev0+71201f4.dirty"
+        # Example 1: "16/1.19.0"
+        # Example 2: "16/1.19.0.post1.dev0+71201f4.dirty"
         self._version = version
         track, pep440_version = self._version.split("/")
-        # Example 1: "14"
+        # Example 1: "16"
         self.track = track
         """Charmhub track"""
 
@@ -114,23 +114,12 @@ class CharmVersion:
 
 
 class PrecheckFailed(Exception):
-    """Pre-refresh health check or preparation failed"""
+    """Pre-refresh health check or preparation failed
+
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/pre-refresh-checks/
+    """
 
     def __init__(self, message: str, /):
-        """Pre-refresh health check or preparation failed
-
-        Include a short, descriptive message that explains to the user which health check or
-        preparation failed. For example: "Backup in progress"
-
-        The message will be shown to the user in the output of `juju status`, refresh actions, and
-        `juju debug-log`.
-
-        Messages longer than 64 characters will be truncated in the output of `juju status`.
-        It is recommended that messages are <= 64 characters.
-
-        Do not mention "pre-refresh check" or prompt the user to rollback in the message—that
-        information will already be included alongside the message.
-        """
         if len(message) == 0:
             raise ValueError(f"{type(self).__name__} message must be longer than 0 characters")
         self.message = message
@@ -141,52 +130,14 @@ class PrecheckFailed(Exception):
 class CharmSpecificCommon(abc.ABC):
     """Charm-specific callbacks & configuration for in-place refreshes on Kubernetes & machines
 
-    Subclass this class to implement the callbacks
-
-    For Kubernetes-only charms, subclass `CharmSpecificKubernetes` directly instead
-    For machines-only charms, subclass `CharmSpecificMachines` directly instead
-
-    For charms that support both Kubernetes and machines in a single codebase, use the following
-    class hierarchy:
-        class MyCommonRefresh(charm_refresh.CharmSpecificCommon):
-            # Implement callbacks that are shared across Kubernetes and machines here
-
-        class MyKubernetesRefresh(MyCommonRefresh, charm_refresh.CharmSpecificKubernetes):
-            # Implement Kubernetes-only callbacks (if any) here
-
-        class MyMachinesRefresh(MyCommonRefresh, charm_refresh.CharmSpecificMachines):
-            # Implement machines-only callbacks here
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/charm-specific/
     """
 
     workload_name: str
     """Human readable workload name (e.g. PostgreSQL)"""
 
     charm_name: str
-    """Charm name in metadata.yaml
-
-    (e.g. postgresql-k8s)
-
-    https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#name
-
-    This will be used to generate a URL to the charm's in-place refresh user documentation
-
-    The URL will be displayed to the user in the output of the `pre-refresh-check` action
-
-    The URL will be generated following this format:
-    `https://charmhub.io/{charm_name}/docs/refresh/{charm_version}`. The `/` character in the charm
-    version will not be URL-encoded.
-    (e.g. https://charmhub.io/postgresql-k8s/docs/refresh/14/1.12.0)
-
-    The URL should be redirected to documentation that provides instructions for how to refresh to
-    all of the versions that support refreshing from this version
-
-    Note that:
-
-    - the `pre-refresh-check` action runs on the old version (the version the user is refreshing
-      from), so the old charm version will be used to generate the URL
-    - at the time this version is released, it is not possible to know all of the future versions
-      that will support refreshing from this version
-    """
+    """Charm name in metadata.yaml (e.g. postgresql-k8s)"""
 
     def __post_init__(self):
         workload_name_and_version = f"{self.workload_name} {_RefreshVersions().workload}"
@@ -204,69 +155,7 @@ class CharmSpecificCommon(abc.ABC):
     def run_pre_refresh_checks_after_1_unit_refreshed() -> None:
         """Run pre-refresh health checks & preparations after the first unit has already refreshed.
 
-        There are three situations in which the pre-refresh health checks & preparations run:
-
-        1. When the user runs the `pre-refresh-check` action on the leader unit before the refresh
-           starts
-        2. On machines, after `juju refresh` and before any unit is refreshed, the highest number
-           unit automatically runs the checks & preparations
-        3. On Kubernetes; after `juju refresh`, after the highest number unit refreshes, and before
-           the highest number unit starts its workload; the highest number unit automatically runs
-           the checks & preparations
-
-        Note that:
-
-        - In situation #1 the checks & preparations run on the old charm code and in situations #2
-          and #3 they run on the new charm code
-        - In situations #2 and #3, the checks & preparations run on a unit that may or may not be
-          the leader unit
-        - In situation #3, the highest number unit's workload is offline
-        - Before the refresh starts, situation #1 is not guaranteed to happen
-        - Situation #2 or #3 (depending on machines or Kubernetes) will happen regardless of
-          whether the user ran the `pre-refresh-check` action
-        - In situations #2 and #3, if the user scales up or down the application before all checks
-          & preparations are successful, the checks & preparations will run on the new highest
-          number unit.
-          If the user scaled up the application:
-              - In situation #3, multiple units' workloads will be offline
-              - In situation #2, the new units may install the new snap version before the checks &
-                preparations succeed
-        - In situations #2 and #3, if the user scales up the application after all checks &
-          preparations succeeded, the checks & preparations will not run again. If they scale down
-          the application, the checks & preparations will most likely not run again
-
-        This method is called in situation #3.
-
-        If possible, pre-refresh checks & preparations should be written to support all 3
-        situations.
-
-        If a pre-refresh check/preparation supports all 3 situations, it should be placed in this
-        method and called by the `run_pre_refresh_checks_before_any_units_refreshed` method.
-
-        Otherwise, if it does not support situation #3 but does support situations #1 and #2, it
-        should be placed in the `run_pre_refresh_checks_before_any_units_refreshed` method.
-
-        By default, all checks & preparations in this method will also be run in the
-        `run_pre_refresh_checks_before_any_units_refreshed` method.
-
-        Checks & preparations are run sequentially. Therefore, it is recommended that:
-
-        - Checks (e.g. backup created) should be run before preparations (e.g. switch primary)
-        - More critical checks should be run before less critical checks
-        - Less impactful preparations should be run before more impactful preparations
-
-        However, if any checks or preparations fail and the user runs the `force-refresh-start`
-        action with `run-pre-refresh-checks=false`, the remaining checks & preparations will be
-        skipped—this may impact how you decide to order the checks & preparations.
-
-        If a check or preparation fails, raise the `PrecheckFailed` exception. All of the checks &
-        preparations may be run again on the next Juju event.
-
-        If all checks & preparations are successful, they will not run again unless the user runs
-        `juju refresh`. Exception: in rare cases, they may run again if the user scales down the
-        application.
-
-        Checks & preparations will not run during a rollback.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/pre-refresh-checks/
 
         Raises:
             PrecheckFailed: A pre-refresh health check or preparation failed
@@ -275,69 +164,7 @@ class CharmSpecificCommon(abc.ABC):
     def run_pre_refresh_checks_before_any_units_refreshed(self) -> None:
         """Run pre-refresh health checks & preparations before any unit is refreshed.
 
-        There are three situations in which the pre-refresh health checks & preparations run:
-
-        1. When the user runs the `pre-refresh-check` action on the leader unit before the refresh
-           starts
-        2. On machines, after `juju refresh` and before any unit is refreshed, the highest number
-           unit automatically runs the checks & preparations
-        3. On Kubernetes; after `juju refresh`, after the highest number unit refreshes, and before
-           the highest number unit starts its workload; the highest number unit automatically runs
-           the checks & preparations
-
-        Note that:
-
-        - In situation #1 the checks & preparations run on the old charm code and in situations #2
-          and #3 they run on the new charm code
-        - In situations #2 and #3, the checks & preparations run on a unit that may or may not be
-          the leader unit
-        - In situation #3, the highest number unit's workload is offline
-        - Before the refresh starts, situation #1 is not guaranteed to happen
-        - Situation #2 or #3 (depending on machines or Kubernetes) will happen regardless of
-          whether the user ran the `pre-refresh-check` action
-        - In situations #2 and #3, if the user scales up or down the application before all checks
-          & preparations are successful, the checks & preparations will run on the new highest
-          number unit.
-          If the user scaled up the application:
-              - In situation #3, multiple units' workloads will be offline
-              - In situation #2, the new units may install the new snap version before the checks &
-                preparations succeed
-        - In situations #2 and #3, if the user scales up the application after all checks &
-          preparations succeeded, the checks & preparations will not run again. If they scale down
-          the application, the checks & preparations will most likely not run again
-
-        This method is called in situations #1 and #2.
-
-        If possible, pre-refresh checks & preparations should be written to support all 3
-        situations.
-
-        If a pre-refresh check/preparation supports all 3 situations, it should be placed in the
-        `run_pre_refresh_checks_after_1_unit_refreshed` method and called by this method.
-
-        Otherwise, if it does not support situation #3 but does support situations #1 and #2, it
-        should be placed in this method.
-
-        By default, all checks & preparations in the
-        `run_pre_refresh_checks_after_1_unit_refreshed` method will also be run in this method.
-
-        Checks & preparations are run sequentially. Therefore, it is recommended that:
-
-        - Checks (e.g. backup created) should be run before preparations (e.g. switch primary)
-        - More critical checks should be run before less critical checks
-        - Less impactful preparations should be run before more impactful preparations
-
-        However, if any checks or preparations fail and the user runs the `force-refresh-start`
-        action with `run-pre-refresh-checks=false`, the remaining checks & preparations will be
-        skipped—this may impact how you decide to order the checks & preparations.
-
-        If a check or preparation fails, raise the `PrecheckFailed` exception. All of the checks &
-        preparations may be run again on the next Juju event.
-
-        If all checks & preparations are successful, they will not run again unless the user runs
-        `juju refresh`. Exception: in rare cases, they may run again if the user scales down the
-        application.
-
-        Checks & preparations will not run during a rollback.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/pre-refresh-checks/
 
         Raises:
             PrecheckFailed: A pre-refresh health check or preparation failed
@@ -375,23 +202,7 @@ class CharmSpecificCommon(abc.ABC):
     ) -> bool:
         """Whether refresh is supported from old to new workload and charm code versions
 
-        This method is called using the new charm code version.
-
-        On Kubernetes, this method runs before the highest number unit starts the new workload
-        version.
-        On machines, this method runs before any unit is refreshed.
-
-        If this method returns `False`, the refresh will be blocked and the user will be prompted
-        to rollback.
-
-        The user can override that block using the `force-refresh-start` action with
-        `check-compatibility=false`.
-
-        In order to support rollbacks, this method should always return `True` if the old and new
-        charm code versions are identical and the old and new workload versions are identical.
-
-        This method should not use any information beyond its parameters to determine if the
-        refresh is compatible.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/is-compatible/
         """
         if not cls._is_charm_version_compatible(old=old_charm_version, new=new_charm_version):
             return False
@@ -402,30 +213,13 @@ class CharmSpecificCommon(abc.ABC):
 class CharmSpecificKubernetes(CharmSpecificCommon, abc.ABC):
     """Charm-specific callbacks & configuration for in-place refreshes on Kubernetes
 
-    Subclass this class to implement the callbacks
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/charm-specific/
     """
 
     oci_resource_name: str
-    """Resource name for workload OCI image in metadata.yaml `resources`
+    """Resource name for workload OCI image in metadata.yaml `resources` (e.g. postgresql-image)
 
-    (e.g. postgresql-image)
-
-    https://canonical-charmcraft.readthedocs-hosted.com/en/stable/reference/files/metadata-yaml-file/#resources
-
-    The resource must contain a `upstream-source` key that pins the OCI image to a digest
-
-    There must be exactly 1 container in metadata.yaml `containers` that uses this resource
-
-    Example metadata.yaml:
-    ```
-    resources:
-      postgresql-image:
-        type: oci-image
-        upstream-source: ghcr.io/canonical/charmed-mysql@sha256:089fc04dd2d6f1559161ddf4720c1e06559aeb731ecae57b050c9c816e9833e9
-    containers:
-      postgresql:
-        resource: postgresql-image
-    ```
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/instantiate/kubernetes/
     """
 
 
@@ -433,54 +227,14 @@ class CharmSpecificKubernetes(CharmSpecificCommon, abc.ABC):
 class CharmSpecificMachines(CharmSpecificCommon, abc.ABC):
     """Charm-specific callbacks & configuration for in-place refreshes on machines
 
-    Subclass this class to implement the callbacks
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/charm-specific/
     """
 
     @abc.abstractmethod
     def refresh_snap(self, *, snap_name: str, snap_revision: str, refresh: "Machines") -> None:
         """Refresh workload snap
 
-        `refresh.update_snap_revision()` must be called immediately after the snap is refreshed.
-
-        This method should:
-
-        1. Gracefully stop the workload, if it is running
-        2. Refresh the snap
-        3. Immediately call `refresh.update_snap_revision()`
-
-        Then, this method should attempt to:
-
-        4. Start the workload
-        5. Check if the application and this unit are healthy
-        6. If they are both healthy, set `refresh.next_unit_allowed_to_refresh = True`
-
-        If the snap is not refreshed, this method will be called again on the next Juju event—if
-        this unit is still supposed to be refreshed.
-
-        Note: if this method was run because the user ran the `resume-refresh` action, this method
-        will not be called again even if the snap is not refreshed unless the user runs the action
-        again.
-
-        If the workload is successfully stopped (step #1) but refreshing the snap (step #2) fails
-        (i.e. the snap revision has not changed), consider starting the workload (in the same Juju
-        event). If refreshing the snap fails, retrying in a future Juju event is not recommended
-        since the user may decide to rollback. If the user does not decide to rollback, this method
-        will be called again on the next Juju event—except in the `resume-refresh` action case
-        mentioned above.
-
-        If the snap is successfully refreshed (step #2), this method will not be called again
-        (unless the user runs `juju refresh` to a different snap revision).
-
-        Therefore, if `refresh.next_unit_allowed_to_refresh` is not set to `True` (step #6)
-        (because starting the workload [step #4] failed, checking if the application and this unit
-        were healthy [step #5] failed, either the application or unit was unhealthy in step #5, or
-        the charm code raised an uncaught exception later in the same Juju event), then the charm
-        code should retry steps #4-#6, as applicable, in future Juju events until
-        `refresh.next_unit_allowed_to_refresh` is set to `True` and an uncaught exception is not
-        raised by the charm code later in the same Juju event.
-
-        Also, if step #5 fails or if either the application or this unit is unhealthy, the charm
-        code should set a unit status to indicate what is unhealthy.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/refresh-snap/
         """
 
 
@@ -494,45 +248,17 @@ class Common(abc.ABC):
     @property
     @abc.abstractmethod
     def in_progress(self) -> bool:
-        """Whether a refresh is currently in progress"""
+        """Whether a refresh is currently in progress
+
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/in-progress/
+        """
 
     @property
     @abc.abstractmethod
     def next_unit_allowed_to_refresh(self) -> bool:
         """Whether the next unit is allowed to refresh
 
-        After this unit refreshes, the charm code should check if the application and this unit are
-        healthy. If they are healthy, this attribute should be set to `True` to allow the refresh
-        to proceed on the next unit.
-
-        Otherwise (if either is unhealthy or if it is not possible to determine that both are
-        healthy), the charm code should (in future Juju events) continue to retry the health checks
-        and set this attribute to `True` when both are healthy. In this Juju event, the charm code
-        should also set a unit status to indicate what is unhealthy.
-
-        If the charm code raises an uncaught exception in the same Juju event where this attribute
-        is set to `True`, it will not be saved. In the next Juju events, the charm code should
-        retry the health checks until this attribute is set to `True` in a Juju event where an
-        uncaught exception is not raised by the charm code.
-
-        This attribute can only be set to `True`. When the unit is refreshed, this attribute will
-        automatically be reset to `False`.
-
-        This attribute should only be read to determine if the health checks need to be run again
-        so that this attribute can be set to `True`.
-
-        Note: this has no connection to the `pause_after_unit_refresh` user configuration option.
-        That user configuration option corresponds to manual checks performed by the user after the
-        automatic checks are successful. This attribute is set to `True` when the automatic checks
-        succeed. For example:
-
-        - If this attribute is set to `True` and `pause_after_unit_refresh` is set to "all", the
-          next unit will not refresh until the user runs the `resume-refresh` action.
-        - If `pause_after_unit_refresh` is set to "none" and this attribute is not set to `True`,
-          the next unit will not refresh until this attribute is set to `True`.
-
-        The user can override failing automatic health checks by running the `resume-refresh`
-        action with `check-health-of-refreshed-units=false`.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/next-unit-allowed-to-refresh/
         """
 
     @next_unit_allowed_to_refresh.setter
@@ -545,43 +271,7 @@ class Common(abc.ABC):
     def workload_allowed_to_start(self) -> bool:
         """Whether this unit's workload is allowed to start
 
-        Only applicable on Kubernetes (if not on Kubernetes, this attribute will always be `True`)
-
-        On Kubernetes, the automatic checks (
-
-        - that OCI image hash matches pin in charm code
-        - that refresh is compatible from old to new workload and charm code versions
-        - pre-refresh health checks & preparations
-
-        ) run after the highest number unit is refreshed but before the highest number unit starts
-        its workload.
-
-        After a unit is refreshed, the charm code must check the value of this attribute to
-        determine if the workload can be started.
-
-        Note: the charm code should check this attribute for all units (not just the highest unit
-        number) in case the user scales up or down the application during the refresh.
-
-        After a unit is refreshed, the charm code should:
-
-        1. Check the value of this attribute. If it is `True`, continue to step #2
-        2. Start the workload
-        3. Check if the application and this unit are healthy
-        4. If they are both healthy, set `next_unit_allowed_to_refresh = True`
-
-        If `next_unit_allowed_to_refresh` is not set to `True` (because the value of this attribute
-        [step #1] was `False`, starting the workload [step #2] failed, checking if the application
-        and this unit were healthy [step #3] failed, either the application or unit was unhealthy
-        in step #3, or the charm code raised an uncaught exception later in the same Juju event),
-        then the charm code should retry these steps, as applicable, in future Juju events until
-        `next_unit_allowed_to_refresh` is set to `True` and an uncaught exception is not raised by
-        the charm code later in the same Juju event.
-
-        Also, if step #3 fails or if either the application or this unit is unhealthy, the charm
-        code should set a unit status to indicate what is unhealthy.
-
-        If the user skips the automatic checks by running the `force-refresh-start` action, the
-        value of this attribute will be `True`.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/workload-allowed-to-start/
         """
 
     @property
@@ -589,7 +279,7 @@ class Common(abc.ABC):
     def app_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
         """App status with higher priority than any other app status in the charm
 
-        Charm code should ensure that this status is not overridden
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/status/
         """
 
     @property
@@ -597,7 +287,7 @@ class Common(abc.ABC):
     def unit_status_higher_priority(self) -> typing.Optional[ops.StatusBase]:
         """Unit status with higher priority than any other unit status in the charm
 
-        Charm code should ensure that this status is not overridden
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/status/
         """
 
     @abc.abstractmethod
@@ -606,10 +296,7 @@ class Common(abc.ABC):
     ) -> typing.Optional[ops.StatusBase]:
         """Unit status with lower priority than any other unit status with a message in the charm
 
-        This status will not be automatically set. It should be set by the charm code if there is
-        no other unit status with a message to display.
-
-        If possible, the charm code should check on every Juju event if this status should be set.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/status/
         """
 
     @abc.abstractmethod
@@ -618,7 +305,10 @@ class Common(abc.ABC):
 
 
 class PeerRelationNotReady(Exception):
-    """Refresh peer relation is not yet available or not all units have joined yet"""
+    """Refresh peer relation is not yet available or not all units have joined yet
+
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/peer-relation-not-ready/
+    """
 
 
 class _PeerRelationMissing(PeerRelationNotReady):
@@ -626,14 +316,16 @@ class _PeerRelationMissing(PeerRelationNotReady):
 
 
 class UnitTearingDown(Exception):
-    """This unit is being removed"""
+    """This unit is being removed
+
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/unit-tearing-down/
+    """
 
 
 class KubernetesJujuAppNotTrusted(Exception):
     """Juju app is not trusted (needed to patch StatefulSet partition)
 
-    User must run `juju trust` with `--scope=cluster` or re-deploy using `juju deploy` with
-    `--trust`
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/kubernetes-juju-app-not-trusted/
     """
 
 
@@ -685,8 +377,10 @@ class _RefreshVersions:
             self.charm = CharmVersion(self._versions["charm"])
             self.workload: str = self._versions["workload"]
         except KeyError:
-            # TODO link to docs with format?
-            raise KeyError("Required key missing from refresh_versions.toml")
+            raise KeyError(
+                "Required key missing from refresh_versions.toml. Docs: "
+                "https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/refresh-versions-toml/"
+            )
         except ValueError:
             raise ValueError("Invalid charm version in refresh_versions.toml")
 
@@ -704,24 +398,23 @@ class _MachinesRefreshVersions(_RefreshVersions):
             self.snap_name: str = self._versions["snap"]["name"]
             snap_revisions = self._versions["snap"]["revisions"]
         except KeyError:
-            # TODO link to docs with format?
-            raise KeyError("Required key missing from refresh_versions.toml")
+            raise KeyError(
+                "Required key missing from refresh_versions.toml. Docs: "
+                "https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/refresh-versions-toml/"
+            )
         try:
             self.snap_revision: str = snap_revisions[platform.machine()]
         except KeyError:
-            # TODO link to docs with format?
-            raise KeyError(f"Snap revision missing for architecture {repr(platform.machine())}")
+            raise KeyError(
+                f"Snap revision missing for architecture {repr(platform.machine())}. Docs: "
+                "https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/refresh-versions-toml/"
+            )
 
 
 def snap_name() -> str:
     """Get workload snap name
 
-    This function can be used during initial snap installation or during snap removal on teardown.
-
-    When refreshing the snap, the snap name can be read from the `refresh_snap` method's
-    `snap_name` parameter.
-
-    Only applicable on machines
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/remove-duplicate-hardcoded-snap/
     """
     return _MachinesRefreshVersions().snap_name
 
@@ -742,7 +435,7 @@ _dot_juju_charm = pathlib.Path(".juju-charm")
 
 
 class _RawCharmRevision(str):
-    """Charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+    """Charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-602")"""
 
     @classmethod
     def from_file(cls):
@@ -769,7 +462,7 @@ class _OriginalVersions:
     """
 
     workload: typing.Optional[str]
-    """Original upstream workload version (e.g. "14.11")
+    """Original upstream workload version (e.g. "16.8")
 
     Always a str if `installed_workload_container_matched_pinned_container` is `True`
     `None` if `installed_workload_container_matched_pinned_container` is `False`
@@ -777,15 +470,15 @@ class _OriginalVersions:
     workload_container: str
     """Original workload image digest (Kubernetes) or snap revision (machines)
 
-    (Kubernetes example: "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
-    (machines example: "20001")
+    (Kubernetes example: "sha256:e53eb99abd799526bb5a5e6c58180ee47e2790c95d433a1352836aa27d0914a4")
+    (machines example: "182")
     """
     installed_workload_container_matched_pinned_container: bool
     """Whether original workload container matched container pinned in original charm code"""
     charm: CharmVersion
     """Original charm version"""
     charm_revision_raw: _RawCharmRevision
-    """Original charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+    """Original charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-602")"""
 
     def __post_init__(self):
         if self.installed_workload_container_matched_pinned_container and self.workload is None:
@@ -870,14 +563,12 @@ class _KubernetesUnit(charm.Unit):
 class Kubernetes(Common):
     """In-place rolling refreshes of stateful charmed applications on Kubernetes
 
-    Instantiate this class at the end of your charm's `ops.CharmBase` `__init__` method
-
-    This class must only be instantiated once
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/instantiate/
 
     Raises:
-        KubernetesJujuAppNotTrusted: Juju app is not trusted
-        UnitTearingDown: This unit is being removed
-        PeerRelationNotReady: The refresh peer relation is not yet available
+        KubernetesJujuAppNotTrusted: https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/kubernetes-juju-app-not-trusted/
+        UnitTearingDown: https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/unit-tearing-down/
+        PeerRelationNotReady: https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/peer-relation-not-ready/
     """
 
     # Use `@Common.in_progress.getter` instead of `@property` to preserve docstring from parent
@@ -1920,14 +1611,14 @@ class Kubernetes(Common):
 
         # Get installed charm revision
         self._installed_charm_revision_raw = _RawCharmRevision.from_file()
-        """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+        """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-602")"""
 
         # Get versions from refresh_versions.toml
         refresh_versions = _RefreshVersions()
         self._installed_charm_version = refresh_versions.charm
         """This unit's charm version"""
         self._pinned_workload_version = refresh_versions.workload
-        """Upstream workload version (e.g. "14.11") pinned by this unit's charm code
+        """Upstream workload version (e.g. "16.8") pinned by this unit's charm code
 
         Used for compatibility check & displayed to user
         """
@@ -1951,14 +1642,14 @@ class Kubernetes(Common):
         except ValueError:
             raise ValueError(
                 f"OCI image in `upstream-source` must be pinned to a digest (e.g. ends with "
-                "'@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6'): "
+                "'@sha256:e53eb99abd799526bb5a5e6c58180ee47e2790c95d433a1352836aa27d0914a4'): "
                 f"{repr(upstream_source)}"
             )
         else:
             self._pinned_workload_container_version = digest
             """Workload image digest pinned by this unit's charm code
 
-            (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
+            (e.g. "sha256:e53eb99abd799526bb5a5e6c58180ee47e2790c95d433a1352836aa27d0914a4")
             """
         workload_containers: typing.List[str] = [
             key
@@ -2003,7 +1694,7 @@ class Kubernetes(Common):
                     f"Found multiple {workload_container} containers for this unit's pod. "
                     "Expected 1 container"
                 )
-            # Example: "registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6"
+            # Example: "registry.jujucharms.com/charm/kotcfrohea62xreenq1q75n1lyspke0qkurhk/postgresql-image@sha256:e53eb99abd799526bb5a5e6c58180ee47e2790c95d433a1352836aa27d0914a4"
             image_id = workload_container_statuses[0].imageID
             if not image_id:
                 raise _InstalledWorkloadContainerDigestNotAvailable
@@ -2023,11 +1714,10 @@ class Kubernetes(Common):
         self._installed_workload_container_version: typing.Optional[str] = image_digest
         """This unit's workload image digest
 
-        (e.g. "sha256:76ef26c7d11a524bcac206d5cb042ebc3c8c8ead73fa0cd69d21921552db03b6")
+        (e.g. "sha256:e53eb99abd799526bb5a5e6c58180ee47e2790c95d433a1352836aa27d0914a4")
         """
 
         if self._unit_controller_revision == self._app_controller_revision:
-            # TODO docs: charm code should not set workload version
             if (
                 self._installed_workload_container_version
                 == self._pinned_workload_container_version
@@ -2173,7 +1863,7 @@ class _HistoryEntry:
     """
 
     charm_revision: _RawCharmRevision
-    """Charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+    """Charm revision in .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-602")"""
     time_of_refresh: float
     """Modified time of .juju-charm file (e.g. 1727768259.4063382)"""
 
@@ -2261,14 +1951,11 @@ class _MachinesDatabagUpToDate(enum.Enum):
 class Machines(Common):
     """In-place rolling refreshes of stateful charmed applications on machines
 
-    Instantiate this class at the end of your charm's `ops.CharmBase` `__init__` method
-
-    This class must only be instantiated once
+    https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/instantiate/
 
     Raises:
-        UnitTearingDown: This unit is being removed
-        PeerRelationNotReady: The refresh peer relation is not yet available or not all units have
-          joined yet
+        UnitTearingDown: https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/unit-tearing-down/
+        PeerRelationNotReady: https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/peer-relation-not-ready/
     """
 
     @Common.in_progress.getter
@@ -2342,11 +2029,7 @@ class Machines(Common):
     def update_snap_revision(self) -> None:
         """Must be called immediately after the workload snap is refreshed
 
-        If the charm code raises an uncaught exception in the same Juju event where this method is
-        called, this method does not need to be called again. (That situation will be automatically
-        handled.)
-
-        Resets `next_unit_allowed_to_refresh` to `False`.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/refresh-snap/
         """
         self._update_snap_revision(raise_if_not_installed=True)
 
@@ -2354,11 +2037,9 @@ class Machines(Common):
     def pinned_snap_revision(self) -> str:
         """Workload snap revision pinned by this unit's current charm code
 
-        This attribute should only be read during initial snap installation and should not be read
-        during a refresh.
+        Must only be used during the initial snap installation and must not be used to refresh the snap
 
-        During a refresh, the snap revision should be read from the `refresh_snap` method's
-        `snap_revision` parameter.
+        https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/remove-duplicate-hardcoded-snap/
         """
         return self._pinned_workload_container_version
 
@@ -3195,14 +2876,14 @@ class Machines(Common):
 
         # Get installed charm revision
         self._installed_charm_revision_raw = _RawCharmRevision.from_file()
-        """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-381")"""
+        """Contents of this unit's .juju-charm file (e.g. "ch:amd64/jammy/postgresql-k8s-602")"""
 
         # Get versions from refresh_versions.toml
         refresh_versions = _MachinesRefreshVersions()
         self._installed_charm_version = refresh_versions.charm
         """This unit's charm version"""
         self._pinned_workload_version = refresh_versions.workload
-        """Upstream workload version (e.g. "14.11") pinned by this unit's charm code
+        """Upstream workload version (e.g. "16.8") pinned by this unit's charm code
 
         Used for compatibility check & displayed to user
         """
@@ -3210,7 +2891,7 @@ class Machines(Common):
         self._pinned_workload_container_version = refresh_versions.snap_revision
         """Snap revision pinned by this unit's charm code for this unit's architecture
 
-        (e.g. "20001")
+        (e.g. "182")
         """
 
         # Save state if this unit's charm code was refreshed to the up-to-date charm code version
@@ -3219,15 +2900,15 @@ class Machines(Common):
         # events in queue or if a unit is raising an uncaught exception. If a unit is raising an
         # uncaught exception, it is not able to save changes to its relation databag.
         # Consider the following example:
-        # - User refreshes from charm revision 10007 to 10008
-        # - Highest unit's charm code refreshes snap from revision 20001 to 20002 and raises an
+        # - User refreshes from charm revision 602 to 613
+        # - Highest unit's charm code refreshes snap from revision 182 to 183 and raises an
         #   uncaught exception in the same Juju event
-        # - User refreshes (rollback) to charm revision 10007
+        # - User refreshes (rollback) to charm revision 602
         # In this example, the highest unit was unable to update its databag while charm revision
-        # 10008 and snap revision 20002 were installed. After the rollback starts, from the
-        # perspective of the other units, the highest unit's databag says that snap revision 20001
-        # and charm revision 10007 are installed (and, therefore, a refresh is not in progress)—
-        # but, in reality, snap revision 20002 is installed.
+        # 613 and snap revision 183 were installed. After the rollback starts, from the perspective
+        # of the other units, the highest unit's databag says that snap revision 182 and charm
+        # revision 602 are installed (and, therefore, a refresh is not in progress)— but, in
+        # reality, snap revision 183 is installed.
         # To detect this, we need a mechanism to determine if a unit's databag is outdated.
         # If the charm revision in the databag is different from this unit's charm revision, we
         # know the databag is outdated.
@@ -3343,7 +3024,6 @@ class Machines(Common):
             # Set app workload version in `juju status` as soon as the charm code is refreshed so
             # that the workload version matches the charm revision shown for this app in
             # `juju status`
-            # TODO docs: charm code should not set workload version
             charm.set_app_workload_version(self._pinned_workload_version)
 
         self._relation = charm_json.PeerRelation.from_endpoint("refresh-v-three")
@@ -3351,7 +3031,7 @@ class Machines(Common):
             raise _PeerRelationMissing
 
         self._installed_workload_version = _LOCAL_STATE / "machines_installed_workload_version"
-        """File containing upstream workload version (e.g. "14.11") installed on this unit
+        """File containing upstream workload version (e.g. "16.8") installed on this unit
 
         Used for compatibility check & displayed to user
 

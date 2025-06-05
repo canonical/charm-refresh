@@ -1,0 +1,155 @@
+= 17. Implement CharmSpecific.is_compatible
+:reftext: 17. Implement is_compatible
+:page-pagination: sibling
+
+is_compatible determines if the refresh from the old to new workload and charm code versions is supported.
+
+.is_compatible method signature
+[,python]
+----
+@classmethod
+def is_compatible(
+    cls,
+    *,
+    old_charm_version: charm_refresh.CharmVersion,
+    new_charm_version: charm_refresh.CharmVersion,
+    old_workload_version: str,
+    new_workload_version: str,
+) -> bool:
+----
+
+is_compatible is called on the new charm code version.
+(This means that is_compatible is responsible for determining which versions the charm code supports refreshing _from_{emdash}not refreshing _to_.)
+
+is_compatible must not use any information outside of its parameters to determine if the refresh is compatible.
+
+is_compatible must always return True if the old and new charm code versions are identical and the old and new workload versions are identical (so that rollbacks are compatible).
+
+.User experience
+****
+If is_compatible returns False, the refresh will be blocked and the user will be promoted to rollback.
+
+The user can override that block using the `force-refresh-start` action with `check-compatibility=false`.
+
+More info: xref:ROOT:user-experience.adoc[]
+****
+
+include::partial$charm-specific-class.adoc[]
+
+[#charm]
+== Charm version
+
+The charm is required to support refreshing to and rollback from newer versions of the charm:
+
+[.excerpt,,'xref:product-requirements.adoc[]']
+____
+include::ROOT:partial$product-requirements.adoc[tag=track-compatibility]
+____
+
+It is strongly recommended to not support charm code downgrades.
+
+This will make xref:backwards-compatibility.adoc[backwards compatibility] much easier.
+
+.Example
+****
+To maintain backwards compatibility during the migration from plaintext relation databag passwords to Juju secrets, Data Platform charms implemented the following:
+
+* During refresh, existing relations continued to use plaintext passwords (so that rollback would be possible)
+* After refresh, new relations used Juju secrets
+* To migrate a pre-existing relation to Juju secrets, the user would remove and re-create the relation
+
+This strategy was only possible because charm code downgrades were not supported.
+****
+
+If you use the recommended approach, add this code to your CharmSpecific class to report the charm code's compatibility:
+
+[,python]
+----
+@classmethod
+def is_compatible(
+    cls,
+    *,
+    old_charm_version: charm_refresh.CharmVersion,
+    new_charm_version: charm_refresh.CharmVersion,
+    old_workload_version: str,
+    new_workload_version: str,
+) -> bool:
+    # Check charm version compatibility
+    if not super().is_compatible(
+        old_charm_version=old_charm_version,
+        new_charm_version=new_charm_version,
+        old_workload_version=old_workload_version,
+        new_workload_version=new_workload_version,
+    ):
+        return False
+----
+
+CAUTION: For a charm with a Kubernetes variant & a machine variant that share code, ensure that this code is placed in your class that directly inherits from charm_refresh.CharmSpecificCommon
+
+.Example CharmSpecific class
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    @classmethod
+    def is_compatible(
+        cls,
+        *,
+        old_charm_version: charm_refresh.CharmVersion,
+        new_charm_version: charm_refresh.CharmVersion,
+        old_workload_version: str,
+        new_workload_version: str,
+    ) -> bool:
+        # Check charm version compatibility
+        if not super().is_compatible(
+            old_charm_version=old_charm_version,
+            new_charm_version=new_charm_version,
+            old_workload_version=old_workload_version,
+            new_workload_version=new_workload_version,
+        ):
+            return False
+----
+
+[#workload]
+== Workload version
+
+Workload compatibility is determined by the upstream workload.
+It may also be affected by changes to the workload packaging.
+
+If an upstream workload supports in-place major version upgrades & rollbacks, it is recommended for charms to not support this by default.
+Instead, it is recommended to only support (if at all) in-place major workload version refreshes between two specific versions (of the charm code and workload) that have been thoroughly tested.
+
+CAUTION: Workload compatibility does not always follow simple rules.
+For example: historically, MySQL has broken backwards compatibility in patch releases.
+Charm developers are responsible for ensuring that `is_compatible` reflects reality
+
+.Example {ex-workload} workload compatibility
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    @classmethod
+    def is_compatible(
+        cls,
+        *,
+        old_charm_version: charm_refresh.CharmVersion,
+        new_charm_version: charm_refresh.CharmVersion,
+        old_workload_version: str,
+        new_workload_version: str,
+    ) -> bool:
+        # Check charm version compatibility
+        if not super().is_compatible(
+            old_charm_version=old_charm_version,
+            new_charm_version=new_charm_version,
+            old_workload_version=old_workload_version,
+            new_workload_version=new_workload_version,
+        ):
+            return False
+
+        # Check workload version compatibility
+        old_major, old_minor = (int(component) for component in old_workload_version.split("."))
+        new_major, new_minor = (int(component) for component in new_workload_version.split("."))
+        if old_major != new_major:
+            return False
+        return new_minor >= old_minor
+----

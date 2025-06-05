@@ -1,1 +1,10 @@
-* xref:index.adoc[]
+* https://github.com/canonical/charm-refresh/labels/known%20limitation[Known limitations^]
+* xref:contact.adoc[]
+* Reference
+** xref:glossary.adoc[]
+** xref:juju-refresh.adoc[]
+** xref:product-requirements.adoc[]
+** xref:user-experience.adoc[]
+*** xref:user-experience/config.adoc[]
+*** xref:user-experience/status.adoc[]
+*** xref:user-experience/actions.adoc[]

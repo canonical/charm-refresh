@@ -1,0 +1,13 @@
+= 10. Update actions.yaml
+:page-pagination: sibling
+
+Add these actions to the `actions.yaml` file.
+It should be located at the root of the charm directory (i.e. in the same directory as charmcraft.yaml).
+If the file does not exist, create it.
+
+.actions.yaml
+[,yaml,subs="+attributes"]
+----
+include::example$actions.yaml[tag=**]
+----
+<1> Replace both instances of `{ex-workload}` with the upstream workload name

@@ -1,0 +1,16 @@
+[%autowidth]
+|===
+|Unit |Workload |Message
+
+|{status-charm}/0*
+|{status-type}
+|{status-0-message}
+
+|{status-charm}/1
+|{status-type}
+|{status-1-message}
+
+|{status-charm}/2
+|{status-type}
+|{status-2-message}
+|===

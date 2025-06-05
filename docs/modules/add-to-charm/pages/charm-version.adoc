@@ -1,0 +1,69 @@
+= 15. Set up charm compatibility version
+:page-pagination: sibling
+
+[#prerequisites]
+== Prerequisites
+
+The charm must use https://python-poetry.org/[Poetry] to manage Python dependencies.
+
+charmcraft.yaml must contain a `poetry-deps` part that installs Poetry and makes the `poetry` command available.
+
+TIP: Does the charm not use Poetry? Follow xref:public-interface.adoc#use-case-not-documented[these instructions]
+
+[#workflow]
+== Use reusable workflow
+
+Follow https://github.com/canonical/data-platform-workflows/blob/main/.github/workflows/release_charm_edge.md[the instructions to use canonical/data-platform-workflows' release_charm_edge.yaml workflow].
+Ensure the `tag` job is included.
+
+[#charm-refresh-build-version]
+== Add charm-refresh-build-version
+
+Add charm-refresh-build-version to the build-refresh-version Poetry dependency group:
+
+[,console]
+----
+$ poetry add --group build-refresh-version charm-refresh-build-version
+----
+
+[#optional-group]
+=== Mark the dependency group as optional
+
+.pyproject.toml
+[,toml]
+----
+[tool.poetry.group.build-refresh-version]
+optional = true
+----
+
+[#charmcraft-yaml]
+== Update charmcraft.yaml
+
+Add the following configuration to the `files` part.
+If the `files` part does not exist, create it.
+
+.Example charmcraft.yaml
+[,yaml]
+----
+parts:
+  # "files" part name is arbitrary; use for consistency
+  files:
+    plugin: dump
+    source: .
+    after:
+      - poetry-deps  # Ensure poetry is installed
+    build-packages:
+      - git
+    override-build: |
+      # Set `charm_version` in refresh_versions.toml from git tag
+      # Create venv in `..` so that git working tree is not dirty
+      python3 -m venv ../refresh-version-venv
+      source ../refresh-version-venv/bin/activate
+      poetry install --only build-refresh-version
+      write-charm-version
+
+      craftctl default
+    stage:
+      - LICENSE
+      - refresh_versions.toml
+----

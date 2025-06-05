@@ -1,0 +1,16 @@
+[#where]
+== Where to instantiate
+
+The refresh class must be instantiated as early as possible in the charm code execution.
+
+It must be instantiated exactly once per Juju event (once per charm code execution).
+
+However, the refresh class must be instantiated after:
+
+* Your CharmSpecific subclass is defined
+* Anything referenced by your CharmSpecific callbacks (i.e. pre-refresh checks, `refresh_snap`) is defined
++
+NOTE: Some of the CharmSpecific callbacks will be implemented in later steps.
+The instantiation may need to be moved after the callbacks are implemented
+
+For most charms, it is simplest to instantiate the refresh class in the `ops.CharmBase` `+__init__+` method.

@@ -1,0 +1,4 @@
+= Add in-place refreshes to a charm
+:page-pagination: next
+
+Step-by-step instructions to add in-place rolling refreshes to a stateful charmed application

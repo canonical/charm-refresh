@@ -1,0 +1,6 @@
+= 16. Subclass CharmSpecific
+:page-pagination: sibling
+
+* For a charm with a Kubernetes variant & a machine variant that share code, follow the xref:charm-specific/kubernetes-and-machines.adoc[] instructions
+* For a Kubernetes-only charm, follow the xref:charm-specific/kubernetes-only.adoc[] instructions
+* For a machine-only charm, follow the xref:charm-specific/machines-only.adoc[] instructions

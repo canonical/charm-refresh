@@ -1,0 +1,126 @@
+= 27. Set status
+:page-pagination: sibling
+
+During every Juju event, the charm code must ensure that the app and unit status are up-to-date and that the most relevant information is displayed in the status.
+
+charm-refresh has 4 categories of statuses:
+
+// List items are referenced by number; update references if numbering changes
+1. App status when xref:kubernetes-juju-app-not-trusted.adoc[KubernetesJujuAppNotTrusted] is raised
+2. `app_status_higher_priority`
+3. `unit_status_higher_priority`
+4. `unit_status_lower_priority`
+
+[#higher-priority]
+== Higher priority status
+
+#1-#3 have higher priority than any other status set by the charm code or charm code dependencies.
+
+These statuses are automatically set by charm-refresh.
+
+While `app_status_higher_priority` is not None or while KubernetesJujuAppNotTrusted is raised, the charm code must not set the app status.
+
+While `unit_status_higher_priority` is not None, the charm code must not set the unit status.
+
+NOTE: charm-refresh may set a status even while a refresh is not in progress
+
+These statuses are not cleared by charm-refresh.
+
+The charm code must clear the status (replace it with another status) *within the same Juju event* when these conditions are met:
+
+* App status: `app_status_higher_priority` is None and KubernetesJujuAppNotTrusted is not raised
+* Unit status: `unit_status_higher_priority` is None
+
+NOTE: "Within the same Juju event" includes Juju events that the charm code may not currently https://ops.readthedocs.io/en/latest/reference/ops.html#ops.Framework.observe[observe]
+
+[#lower-priority]
+== Lower priority status
+
+#4 has lower priority that any other status with a message set by the charm code or charm code dependencies.
+
+These statuses are not set by charm-refresh.
+
+The charm code must check in *every Juju event* if this status should be set.
+
+NOTE: "Every Juju event" includes Juju events that the charm code may not currently https://ops.readthedocs.io/en/latest/reference/ops.html#ops.Framework.observe[observe]
+
+[#implementation]
+== Implementation
+
+[CAUTION]
+====
+https://ops.readthedocs.io/en/latest/reference/ops.html#ops.CollectStatusEvent[ops' collect status event] must not be used.
+
+If it is used, ops will override higher priority refresh statuses with (lower priority) charm code statuses.
+For example, if a charm code component sets a blocked status and the higher priority refresh status is a maintenance status, ops will incorrectly display the charm code status instead of the refresh status
+====
+
+.Example
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    refresh: charm_refresh.Common
+
+    @staticmethod
+    def _prioritize_statuses_by_type(
+        statuses: list[ops.StatusBase]
+    ) -> ops.StatusBase:
+        status_priority = (
+            ops.BlockedStatus,
+            ops.MaintenanceStatus,
+            ops.WaitingStatus,
+            ops.ActiveStatus,
+        )
+        for status_type in status_priority:
+            for status in statuses:
+                if isinstance(status, status_type):
+                    return status
+        return ops.ActiveStatus()
+
+    def _determine_app_status(self) -> ops.StatusBase:
+        if self.refresh.app_status_higher_priority:
+            return self.refresh.app_status_higher_priority # <1>
+        charm_statuses = []
+        for endpoint in (self._database_provides, self._async_replication):
+            if status := endpoint.status:
+                charm_statuses.append(status)
+        return self._prioritize_statuses_by_type(charm_statuses)
+
+    def _determine_unit_status(self) -> ops.StatusBase:
+        if self.refresh.unit_status_higher_priority:
+            return self.refresh.unit_status_higher_priority # <1>
+        charm_statuses = []
+        if status := self._workload.status:
+            charm_statuses.append(status)
+        charm_status = self._prioritize_statuses_by_type(charm_statuses)
+        refresh_lower_priority = self.refresh.unit_status_lower_priority(
+            workload_is_running=self._workload.is_running # <2>
+        )
+        if charm_status.message == "" and refresh_lower_priority: # <3>
+            return refresh_lower_priority
+        return charm_status
+
+    def set_status(self) -> None:
+        if self.unit.is_leader():
+            self.app.status = self._determine_app_status()
+        self.unit.status = self._determine_unit_status()
+
+    def __init__(self, *args):
+        # [...]
+
+        # Observe all events (except custom events)
+        for bound_event in self.on.events().values():
+            if bound_event.event_type == ops.CollectStatusEvent:
+                continue
+            self.framework.observe(bound_event, self.reconcile) # <4>
+
+        # [...]
+
+    def reconcile(self, event):
+        # [...]
+        self.set_status() # <4>
+----
+<1> If charm-refresh reports a higher priority status, ensure that it is not overridden by another status
+<2> When querying `unit_status_lower_priority`, inform charm-refresh whether the workload is running
+<3> Only set `unit_status_lower_priority` if there is no other unit status with a message to display
+<4> Set the app and unit status at the end of every Juju event to ensure that the statuses are up-to-date

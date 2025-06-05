@@ -1,0 +1,27 @@
+= Machines
+
+include::partial$instantiate-where.adoc[]
+
+[#implement]
+== Instantiate charm_refresh.Machines
+
+.Example charm.py
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        # [...]
+
+        self.refresh = charm_refresh.Machines(
+            {ex-charm-specific-vm}( # <.>
+                workload_name="{ex-workload}", # <.>
+                charm_name="{ex-charm-vm}", # <.>
+            )
+        )
+
+        # [...]
+----
+<.> Replace `{ex-charm-specific-vm}` with your subclass of charm_refresh.CharmSpecificMachines
+<.> Replace `{ex-workload}` with the upstream workload name.
+This must be the same as the name used in xref:actions-yaml.adoc[]
+<.> Replace `{ex-charm-vm}` with the charm name in metadata.yaml

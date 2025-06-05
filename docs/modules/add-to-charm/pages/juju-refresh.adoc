@@ -1,0 +1,5 @@
+= 3. What happens after `juju refresh`
+:page-pagination: sibling
+:page-noindex:
+
+include::ROOT:partial$juju-refresh.adoc[]

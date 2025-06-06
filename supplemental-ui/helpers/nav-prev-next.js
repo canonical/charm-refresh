@@ -31,14 +31,14 @@ module.exports = ({data: {root}}) => {
     }
     if (pagination === "sibling") {
         if (page.parent === undefined) {
-            throw new Error("page-pagination 'sibling' not implemented for pages in top-level of navigation")
+            throw new Error("page-pagination 'sibling' not implemented for pages in top-level of navigation (page.url: " + page.url + ")")
         }
         const siblings = page.parent.items
         const this_page_index = siblings.findIndex(page_ => page_.url === page.url)
-        previous = siblings[this_page_index-1] || null
+        previous = siblings[this_page_index - 1] || null
         const this_page_has_no_children = siblings[this_page_index].items === undefined
         if (this_page_has_no_children) {
-            next = siblings[this_page_index+1] || null
+            next = siblings[this_page_index + 1] || null
         }
     }
     return {previous: previous, next: next}

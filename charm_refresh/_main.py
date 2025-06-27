@@ -356,6 +356,8 @@ class CharmSpecificCommon(abc.ABC):
             # Unreleased charms contain changes that do not affect the version number
             # Those changes could affect compatability
             return False
+        if old.track != new.track:
+            return False
         if old.major != new.major:
             return False
         # By default, charm code downgrades are not supported (rollbacks are supported)

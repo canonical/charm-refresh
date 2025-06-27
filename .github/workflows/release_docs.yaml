@@ -25,7 +25,7 @@ jobs:
   release-docs:
     name: Release docs to Read the Docs
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15  # Long timeout needed for Read the Docs build queue
     steps:
       - name: Release documentation
         shell: python

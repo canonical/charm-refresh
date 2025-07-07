@@ -975,10 +975,11 @@ class Kubernetes(Common):
             # is likely a mistake, but may be intentional.
             # We don't know what workload version is in the workload container
             message = f"{self._charm_specific.workload_name}"
+        restart_pending = self._unit_controller_revision != self._app_controller_revision
         if workload_is_running:
             message += " running"
-        if self._unit_controller_revision != self._app_controller_revision:
-            message += " (restart pending)"
+            if restart_pending:
+                message += " (restart pending)"
         if self._installed_charm_revision_raw.charmhub_revision:
             # Charm was deployed from Charmhub; use revision
             message += f"; Charm revision {self._installed_charm_revision_raw.charmhub_revision}"
@@ -995,6 +996,10 @@ class Kubernetes(Common):
                 # This message is unlikely to be displayed—the status will probably be overridden
                 # by a Kubernetes ImagePullBackOff error
                 message += "; Unable to check container"
+        if not workload_is_running and restart_pending:
+            # Display at end of message instead of next to workload to avoid implying that the
+            # workload is running
+            message += " (restart pending)"
         if workload_is_running:
             return ops.ActiveStatus(message)
         return ops.WaitingStatus(message)

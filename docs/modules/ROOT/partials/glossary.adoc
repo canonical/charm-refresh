@@ -1,0 +1,103 @@
+This page precisely defines terms used in this documentation, the log messages, and the source code.
+
+Understanding the full nuances of these definitions is a prerequisite to successfully understanding and following the documentation.
+
+'''
+
+{url-juju-docs}/reference/application/[Application], {url-juju-docs}/reference/unit/[unit], {url-juju-docs}/reference/unit/#leader-unit[leader], {url-juju-docs}/reference/charm/[charm], {url-juju-docs}/reference/charm/#charm-revision[charm revision], and {url-juju-docs}/reference/relation/[relation/integration] have the same meaning as in the Juju documentation.
+
+User::
+User of Juju (e.g. user of juju CLI).
+Same meaning as "user" {url-juju-docs}/reference/user/[in the Juju documentation]
+
+Event::
+Same meaning as "{url-juju-docs}/reference/hook/[Juju event]" or "hook" in the Juju documentation.
+Does not refer to an "ops event"
+
+Workload::
+A software component that the charm operates (e.g. {ex-workload})
+* Note: a charm can have 0, 1, or multiple workloads
+
+Charm code::
+Contents of *.charm file or `charm` directory (e.g. `/var/lib/juju/agents/unit-{ex-charm}-0/charm/`) on a unit.
+Contains charm source code and (specific versions of) Python dependencies
+
+Charm code version::
+Same meaning as {url-juju-docs}/reference/charm/#charm-revision[charm revision]
+
+Outdated version::
+* Charm code version on a unit that *does not* match the application's charm code version (revision),
+* Workload version on a unit that *does not* match the application's workload version,
++
+--
+** On Kubernetes, the application's workload version is the {url-juju-docs}/reference/resource-charm/[OCI resource] specified by the user
+** On machines, the application's workload version is pinned in the application's charm code version (revision)
+--
++
+and/or
+* (Kubernetes only) StatefulSet https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/controller-revision-v1/[ControllerRevision] on a unit that *does not* match the application's StatefulSet ControllerRevision
++
+[TIP]
+====
+The only circumstance where an outdated ControllerRevision is relevant (i.e. the only circumstance where a unit's charm code version and workload version are up-to-date but the unit's ControllerRevision is outdated) is a rollback.
+
+During a rollback on Kubernetes, all pods--even those that have not refreshed--will need to be deleted and re-created on the new ControllerRevision before the rollback is complete.
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2036246
+====
+
+Up-to-date version::
+* Charm code version on a unit that *does* match the application's charm code version (revision),
+* Workload version on a unit that *does* match the application's workload version,
++
+--
+** On Kubernetes, the application's workload version is the {url-juju-docs}/reference/resource-charm/[OCI resource] specified by the user
+** On machines, the application's workload version is pinned in the application's charm code version (revision)
+--
++
+and/or
+* (Kubernetes only) StatefulSet https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/controller-revision-v1/[ControllerRevision] on a unit that *does* match the application's StatefulSet ControllerRevision
+
+Original version::
+Workload and/or charm code version of all units immediately after the last completed refresh--or, if no completed refreshes, immediately after `juju deploy` and (on machines) initial installation
+
+[#app]
+== For an application (or if not specified)
+
+Refresh::
+`juju refresh` to a different workload and/or charm code version
+* Note: "rollback" and "downgrade" are specific types of "refresh"
+
+In-progress refresh::
+1+ units have an outdated workload version, charm code version, and/or (Kubernetes only) StatefulSet ControllerRevision
+
+Completed refresh::
+All units have the up-to-date workload version, charm code version, and (Kubernetes only) StatefulSet ControllerRevision
+
+Rollback::
+While a refresh is in-progress and 1+ units have the *original* workload (and, on Kubernetes, charm code) version, `juju refresh` to the original workload and charm code version
+* Note: If all units have already refreshed, then it would be a downgrade, not a rollback
+* Note: If `juju refresh` is not to the original workload and charm code version, then it is not a rollback
+
+Downgrade::
+Refresh to older (lower) workload and/or charm code version
+
+[#unit]
+== For a unit
+
+Charm code refresh::
+Contents of `charm` directory are replaced with up-to-date charm code version
+
+Workload refresh::
+Workload is stopped (if running) and updated to up-to-date workload version
+
+Refresh::
+* For Kubernetes: charm code and workload are refreshed
+* For machines: workload is refreshed
+
+Rollback::
+* For Kubernetes: charm code and workload are refreshed to original versions
+* For machines: workload is refreshed to original version
+
+Downgrade::
+* For Kubernetes: charm code and/or workload are refreshed to older (lower) version
+* For machines: workload is refreshed to older (lower) version

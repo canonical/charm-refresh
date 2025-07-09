@@ -1,0 +1,317 @@
+= Statuses
+:page-toclevels: 3
+
+[NOTE]
+====
+Status messages over 120 characters are truncated in the output of `juju status` (tested on Juju 3.1.6 and 2.9.45).
+
+When considering changes to status messages, assume that unit numbers are 2 characters and (charm or snap) revisions are 5 characters
+====
+
+[#app]
+== Application
+
+These statuses have higher priority than any other application status in a charm.
+
+[#invalid-pause-after-unit-refresh]
+=== pause_after_unit_refresh set to invalid value
+
+xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is not set to `all`, `first`, or `none`
+
+:status-charm: {ex-charm}
+:status-type: blocked
+:status-message: pause_after_unit_refresh config must be set to "all", "first", or "none"
+include::partial$app-status.adoc[]
+
+[#machines-incompatible]
+=== (Machines only) Refresh is incompatible
+
+On machines, after the user runs `juju refresh` and before any workload is refreshed, the new charm code checks if it supports refreshing from the previous workload & charm code version.
+
+If the refresh is not supported, no workload will be refreshed.
+
+:status-charm: {ex-charm-vm}
+:status-type: blocked
+:status-rev: {ex-charm-rev-to}
+:status-message: Refresh incompatible. Rollback with `juju refresh --revision {ex-charm-rev}`
+include::partial$app-status-rev.adoc[]
+
+This status will only be displayed if an incompatible refresh has not been forced on the first unit to refresh with the xref:user-experience/actions.adoc#force-refresh-start[force-refresh-start action].
+
+The leader unit will also log an INFO level message to `juju debug-log`.
+For example:
+
+[.wrap,subs="+attributes"]
+----
+unit-{ex-charm-vm}-0: 11:34:35 INFO unit.{ex-charm-vm}/0.juju-log charm_refresh:Refresh incompatible. Rollback with `juju refresh`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action {ex-charm-vm} force-refresh-start` for more information
+----
+
+[#in-progress-pause]
+=== Refresh will pause for manual confirmation
+
+(xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is set to `all` or set to `first` and the second unit has not started to refresh)
+
+[#in-progress-pause-kubernetes]
+==== Kubernetes
+
+:status-charm: {ex-charm}
+:status-type: blocked
+:status-rev: {ex-charm-rev-to}
+:status-message: Refreshing. Check units >=2 are healthy & run `resume-refresh` on leader. To rollback, see docs or `juju debug-log`
+include::partial$app-status-rev.adoc[]
+
+During every Juju event, the leader unit will also log an INFO level message to `juju debug-log`.
+For example:
+
+[.wrap,subs="+attributes"]
+----
+unit-{ex-charm}-0: 11:34:35 INFO unit.{ex-charm}/0.juju-log charm_refresh:Refresh in progress. To rollback, run `{ex-rollback-command}`
+----
+
+[#in-progress-pause-machines]
+==== Machines
+
+:status-charm: {ex-charm-vm}
+:status-type: blocked
+:status-rev: {ex-charm-rev-to}
+:status-message: Refreshing. Check units >=2 are healthy & run `resume-refresh` on unit 1. To rollback, `juju refresh --revision {ex-charm-rev}`
+include::partial$app-status-rev.adoc[]
+
+[#in-progress-no-pause]
+=== Refresh will not pause for manual confirmation
+
+(xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is set to `none` or set to `first` and the second unit has refreshed or started to refresh)
+
+:status-charm: {ex-charm}
+:status-type: maintenance
+:status-message: Refreshing. To pause refresh, run `juju config {ex-charm} pause_after_unit_refresh=all`
+include::partial$app-status.adoc[]
+
+[#unit-higher-priority]
+== Unit higher priority
+
+These statuses have higher priority than any other unit status in a charm.
+
+[#unknown-workload]
+=== (Kubernetes only) Workload version does not match charm code version
+
+If the user runs `juju refresh` with `--revision` and without `--resource`, the workload(s) will not be refreshed.
+This is not supported--Data Platform charms pin a specific workload version for each charm code version.
+
+Similarly, these additional cases are not supported and will have the same user experience:
+
+* If the user runs `juju refresh` with `--resource` and with a `--revision` of the charm code that does not pin that specified resource (workload) version, the workload(s) & charm code will be refreshed but will not match
+* If the user runs `juju refresh` with `--resource` and with `--channel` (they should instead only use `--channel`), the workload(s) & charm code will be refreshed but may not match
+* If the user runs `juju refresh` with `--resource` and without `--channel` or `--revision`, Juju will use the currently tracked channel--which is the same as the previous case
+
+:status-charm: {ex-charm}
+:status-type: blocked
+:status-message: `juju refresh` was run with missing/incorrect OCI resource. Rollback with instructions in docs or see `juju debug-log`
+include::partial$highest-unit-status.adoc[]
+
+This status will only be displayed on the first unit to refresh and only if the workload has not been forced to (attempt to) start with the xref:user-experience/actions.adoc#force-refresh-start[force-refresh-start action].
+
+The unit will also log an ERROR level message to `juju debug-log`.
+For example:
+
+[.wrap,subs="+attributes"]
+----
+unit-{ex-charm}-2: 11:34:35 ERROR unit.{ex-charm}/2.juju-log charm_refresh:`juju refresh` was run with missing or incorrect OCI resource. Rollback by running `{ex-rollback-command}`. If you are intentionally attempting to refresh to a {ex-workload} container version that is not validated with this release, you may experience data loss and/or downtime as a result of refreshing. The refresh can be forced to continue with the `force-refresh-start` action and the `check-workload-container` parameter. Run `juju show-action {ex-charm} force-refresh-start` for more information
+----
+
+[#kubernetes-incompatible]
+=== (Kubernetes only) Refresh is incompatible
+
+On Kubernetes, after the first unit refreshes and before that unit starts its workload, that unit (new charm code) checks if it supports refreshing from the previous workload & charm code version.
+
+If the refresh is not supported, that unit will not start its workload.
+
+:status-charm: {ex-charm}
+:status-type: blocked
+:status-message: Refresh incompatible. Rollback with instructions in Charmhub docs or see `juju debug-log`
+include::partial$highest-unit-status.adoc[]
+
+This status will only be displayed on the first unit to refresh and only if the workload has not been forced to (attempt to) start with the xref:user-experience/actions.adoc#force-refresh-start[force-refresh-start action].
+
+The unit will also log an INFO level message to `juju debug-log`.
+For example:
+
+[.wrap,subs="+attributes"]
+----
+unit-{ex-charm}-2: 11:34:35 INFO unit.{ex-charm}/2.juju-log charm_refresh:Refresh incompatible. Rollback by running `{ex-rollback-command}`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action {ex-charm} force-refresh-start` for more information
+----
+
+[#precheck-failed]
+=== Automatic pre-refresh health checks & preparations failed
+
+Regardless of whether the user runs the xref:user-experience/actions.adoc#pre-refresh-check[pre-refresh-check action] before `juju refresh`, the charm will run pre-refresh health checks & preparations after `juju refresh`{emdash}unless it is a rollback.
+
+On machines, the checks & preparations run before any workload is refreshed.
+These checks & preparations are identical to those in the xref:user-experience/actions.adoc#pre-refresh-check[pre-refresh-check action]{emdash}except that they are from the new charm code version.
+
+On Kubernetes, the checks & preparations run after the first unit has refreshed.
+These checks & preparations are a subset of those in the xref:user-experience/actions.adoc#pre-refresh-check[pre-refresh-check action] (since some checks & preparations may require that all units have the same workload version).
+These checks & preparations run on the refreshed unit (i.e. on the new charm code version).
+
+:status-charm: {ex-charm}
+:status-type: blocked
+:status-message: Rollback with `juju refresh`. Pre-refresh check failed: {ex-precheck-failure}
+include::partial$highest-unit-status.adoc[]
+
+This status will only be displayed on the first unit to refresh and only if the workload has not been forced to refresh (machines) or to attempt to start (Kubernetes) with the xref:user-experience/actions.adoc#force-refresh-start[force-refresh-start action].
+
+The unit will also log an ERROR level message to `juju debug-log`.
+For example:
+
+.Kubernetes
+[.wrap,subs="+attributes"]
+----
+unit-{ex-charm}-2: 11:34:35 ERROR unit.{ex-charm}/2.juju-log charm_refresh:Pre-refresh check failed: {ex-precheck-failure}. Rollback by running `{ex-rollback-command}`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run `juju show-action {ex-charm} force-refresh-start` for more information
+----
+
+.Machines
+[.wrap,subs="+attributes"]
+----
+unit-{ex-charm-vm}-2: 11:34:35 ERROR unit.{ex-charm-vm}/2.juju-log charm_refresh:Pre-refresh check failed: {ex-precheck-failure}. Rollback with `juju refresh`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `run-pre-refresh-checks` parameter. Run `juju show-action {ex-charm-vm} force-refresh-start` for more information
+----
+
+[#unit-lower-priority]
+== Unit lower priority
+
+These statuses have lower priority than any other unit status with a message in a charm.
+
+In all of the following examples, all units are healthy.
+If a unit was unhealthy, that unit's status would take priority.
+
+[#unit-lower-priority-kubernetes]
+=== Kubernetes
+
+[#kubernetes-normal]
+==== Example: Normal refresh
+
+Unit 2 has refreshed.
+Units 1 and 0 have not refreshed.
+
+:status-charm: {ex-charm}
+:status-type: active
+:status-0-message: {ex-workload} {ex-workload-version} running (restart pending); Charm revision {ex-charm-rev}
+:status-1-message: {status-0-message}
+:status-2-message: {ex-workload} {ex-workload-version-to} running; Charm revision {ex-charm-rev-to}
+include::partial$unit-statuses.adoc[]
+
+[#kubernetes-rollback]
+==== Example: Rollback
+
+Units 2 and 1 refreshed from revision {ex-charm-rev} & OCI resource {ex-image-digest-short} to revision {ex-charm-rev-to} & OCI resource {ex-image-digest-to-short}.
+
+Then, the user ran `juju refresh` to revision {ex-charm-rev} & OCI resource {ex-image-digest-short}.
+Unit 2 has rolled back.
+
+:status-charm: {ex-charm}
+:status-type: active
+:status-0-message: {ex-workload} {ex-workload-version} running (restart pending); Charm revision {ex-charm-rev}
+:status-1-message: {ex-workload} {ex-workload-version-to} running (restart pending); Charm revision {ex-charm-rev-to}
+:status-2-message: {ex-workload} {ex-workload-version} running; Charm revision {ex-charm-rev}
+include::partial$unit-statuses.adoc[]
+
+Unit 0 will restart even though the workload & charm code version will not change.
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2036246
+
+[#kubernetes-charm-code-only]
+==== Example: Charm code refresh without workload refresh
+
+If the charm code is refreshed and the workload version is unchanged, all units will restart.
+This happens because `juju refresh` updates the Kubernetes StatefulSet.
+
+Unit 2 has refreshed.
+Units 1 and 0 have not refreshed.
+
+:status-charm: {ex-charm}
+:status-type: active
+:status-0-message: {ex-workload} {ex-workload-version} running (restart pending); Charm revision {ex-charm-rev}
+:status-1-message: {status-0-message}
+:status-2-message: {ex-workload} {ex-workload-version} running; Charm revision {ex-charm-rev-to}
+include::partial$unit-statuses.adoc[]
+
+[#kubernetes-workload-offline]
+==== Example: Workload is not running before & during refresh
+
+These statuses are only applicable if the workload would also not be running if there was no refresh in progress.
+
+For example, MySQL Router will only run if its charm is related to a MySQL charm.
+If a MySQL Router charm--that is not related to a MySQL charm--is refreshed, these statuses would be shown.
+
+Unit 2 has refreshed.
+Units 1 and 0 have not refreshed.
+
+:status-charm: mysql-router-k8s
+:status-type: waiting
+:status-0-message: Router 8.0.36; Charm revision {ex-charm-rev} (restart pending)
+:status-1-message: {status-0-message}
+:status-2-message: Router 8.0.37; Charm revision {ex-charm-rev-to}
+include::partial$unit-statuses.adoc[]
+
+[#kubernetes-unknown-workload]
+==== Example: Refresh to unsupported workload version
+
+The user refreshed to an unsupported workload version (OCI image 68ed80) and forced the refresh to continue with xref:user-experience/actions.adoc#force-refresh-start[force-refresh-start] `check-workload-container=false`.
+
+Unit 2 has refreshed.
+Units 1 and 0 have not refreshed.
+
+:status-charm: {ex-charm}
+:status-type: active
+:status-0-message: {ex-workload} {ex-workload-version} running (restart pending); Charm revision {ex-charm-rev}
+:status-1-message: {status-0-message}
+:status-2-message: {ex-workload} running; Charm revision {ex-charm-rev-to}; Unexpected container 68ed80
+include::partial$unit-statuses.adoc[]
+
+[#lower-priority-machines]
+=== Machines
+
+[#machines-normal]
+==== Example: Normal refresh
+
+Unit 2 has refreshed.
+Units 1 and 0 have not refreshed.
+
+:status-charm: {ex-charm-vm}
+:status-type: active
+:status-0-message: {ex-workload} {ex-workload-version} running; Snap revision {ex-snap-rev} (outdated); Charm revision {ex-charm-rev-to}
+:status-1-message: {status-0-message}
+:status-2-message: {ex-workload} {ex-workload-version-to} running; Snap revision {ex-snap-rev-to}; Charm revision {ex-charm-rev-to}
+include::partial$unit-statuses.adoc[]
+
+[#machines-rollback]
+==== Example: Rollback
+
+The user ran `juju refresh` to revision {ex-charm-rev-to}.
+Units 2 and 1 refreshed from snap revision {ex-snap-rev} to {ex-snap-rev-to}.
+
+Then, the user ran `juju refresh` to revision {ex-charm-rev}.
+Unit 2 has rolled back to snap revision {ex-snap-rev}.
+
+:status-charm: {ex-charm-vm}
+:status-type: active
+:status-0-message: {ex-workload} {ex-workload-version} running; Snap revision {ex-snap-rev}; Charm revision {ex-charm-rev}
+:status-1-message: {ex-workload} {ex-workload-version-to} running; Snap revision {ex-snap-rev-to} (outdated); Charm revision {ex-charm-rev}
+:status-2-message: {status-0-message}
+include::partial$unit-statuses.adoc[]
+
+[#machines-workload-offline]
+==== Example: Workload is not running before & during refresh
+
+These statuses are only applicable if the workload would also not be running if there was no refresh in progress.
+
+For example, MySQL Router will only run if its charm is related to a MySQL charm.
+If a MySQL Router charm--that is not related to a MySQL charm--is refreshed, these statuses would be shown.
+
+Unit 2 has refreshed.
+Units 1 and 0 have not refreshed.
+
+:status-charm: mysql-router
+:status-type: waiting
+:status-0-message: Router 8.0.36; Snap revision {ex-snap-rev} (outdated); Charm revision {ex-charm-rev-to}
+:status-1-message: {status-0-message}
+:status-2-message: Router 8.0.37; Snap revision {ex-snap-rev-to}; Charm revision {ex-charm-rev-to}
+include::partial$unit-statuses.adoc[]

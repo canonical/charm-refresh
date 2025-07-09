@@ -1,0 +1,10 @@
+= 7. Add charm-refresh
+:page-pagination: sibling
+
+Add `charm-refresh` to the charm's Python dependencies
+
+.Example for a charm that uses Poetry to manage dependencies
+[,console]
+----
+$ poetry add charm-refresh
+----

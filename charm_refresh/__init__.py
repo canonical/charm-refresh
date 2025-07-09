@@ -1,5 +1,7 @@
-"""In-place rolling refreshes of stateful charmed applications"""
-# TODO add docs link
+"""In-place rolling refreshes of stateful charmed applications
+
+https://canonical-charm-refresh.readthedocs-hosted.com/
+"""
 
 from ._main import (
     CharmSpecificCommon,

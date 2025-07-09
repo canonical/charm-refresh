@@ -1,0 +1,30 @@
+= Kubernetes
+
+include::partial$instantiate-where.adoc[]
+
+[#implement]
+== Instantiate charm_refresh.Kubernetes
+
+.Example charm.py
+[,python,subs="+attributes"]
+----
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        # [...]
+
+        self.refresh = charm_refresh.Kubernetes(
+            {ex-charm-specific-k8s}( # <.>
+                workload_name="{ex-workload}", # <.>
+                charm_name="{ex-charm}", # <.>
+                oci_resource_name="{ex-oci-resource-name}", # <.>
+            )
+        )
+
+        # [...]
+----
+<.> Replace `{ex-charm-specific-k8s}` with your subclass of charm_refresh.CharmSpecificKubernetes
+<.> Replace `{ex-workload}` with the upstream workload name.
+This must be the same as the name used in xref:actions-yaml.adoc[]
+<.> Replace `{ex-charm}` with the charm name in metadata.yaml
+<.> Replace `{ex-oci-resource-name}` with the resource name for the workload OCI image in metadata.yaml resources.
+This must be the same as the resource used in xref:refresh-versions-toml.adoc[]

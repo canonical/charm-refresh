@@ -1,0 +1,7 @@
+= 11. Create refresh_versions.toml
+:page-pagination: sibling
+
+* xref:refresh-versions-toml/kubernetes.adoc[]
+* xref:refresh-versions-toml/machines.adoc[]
+
+For a repository that contains both a Kubernetes charm and a machine charm, follow the individual instructions for each charm.

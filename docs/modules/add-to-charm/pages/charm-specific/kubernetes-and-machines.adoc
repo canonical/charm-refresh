@@ -1,0 +1,115 @@
+= Kubernetes and machines
+
+This page is for a charm with a Kubernetes variant & a machine variant that share code.
+For other charms, go to xref:charm-specific.adoc[].
+
+[#shared]
+== Shared code
+
+In the code that is shared across Kubernetes & machines, subclass CharmSpecificCommon:
+
+.Example shared code
+[,python,subs="+attributes"]
+----
+import abc
+import dataclasses
+
+import charm_refresh
+
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    pass
+----
+
+[#kubernetes]
+== Kubernetes-specific code
+
+In the Kubernetes-specific code, subclass your class from <<shared>> and CharmSpecificKubernetes:
+
+.Example Kubernetes-specific code
+[,python,subs="+attributes"]
+----
+import dataclasses
+
+import charm_refresh
+import common
+
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-k8s}(
+    common.{ex-charm-specific-common}, # <.>
+    charm_refresh.CharmSpecificKubernetes,
+):
+    pass
+----
+<.> Your class must come before CharmSpecificKubernetes
+
+[#machines]
+== Machines-specific code
+
+In the machines-specific code, subclass your class from <<shared>> and CharmSpecificMachines:
+
+.Example machines-specific code
+[,python,subs="+attributes"]
+----
+import dataclasses
+
+import charm_refresh
+import common
+
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-vm}(
+    common.{ex-charm-specific-common}, # <.>
+    charm_refresh.CharmSpecificMachines
+):
+    pass
+----
+<.> Your class must come before CharmSpecificMachines
+
+[#implementation-class]
+== Which class to implement in
+
+In future steps, you will implement code for the CharmSpecific class.
+
+If the code is the same on Kubernetes & machines, implement it in your class that inherits directly from charm_refresh.CharmSpecificCommon.
+
+If the code is unique to Kubernetes or machines, implement it in your class that inherits directly from charm_refresh.CharmSpecificKubernetes or charm_refresh.CharmSpecificMachines, respectively.
+
+[TIP]
+====
+Leverage inheritance!
+If the code is mostly the same, implement it in your common class.
+Then, in your Kubernetes or machines class, override the method and use `super()` to call the original method.
+
+.Inheritance example
+[,python,subs="+attributes"]
+----
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-common}(charm_refresh.CharmSpecificCommon, abc.ABC):
+    def run_pre_refresh_checks_after_1_unit_refreshed(self) -> None: # <.>
+        if self._charm._patroni.is_creating_backup:
+            raise charm_refresh.PrecheckFailed("Backup in progress")
+
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-k8s}(
+    {ex-charm-specific-common},
+    charm_refresh.CharmSpecificKubernetes,
+):
+    def run_pre_refresh_checks_after_1_unit_refreshed(self) -> None:
+        super().run_pre_refresh_checks_after_1_unit_refreshed() # <.>
+
+        # <.>
+        if not self._charm.is_kubernetes_service_healthy():
+            raise charm_refresh.PrecheckFailed("Kubernetes service unhealthy")
+
+@dataclasses.dataclass(eq=False)
+class {ex-charm-specific-vm}(
+    {ex-charm-specific-common},
+    charm_refresh.CharmSpecificMachines
+):
+    pass # <.>
+----
+<.> Common code
+<.> `super()` call to run common code
+<.> Kubernetes-specific code
+<.> The machines implementation is the same as the common code; no need to override run_pre_refresh_checks_after_1_unit_refreshed
+====

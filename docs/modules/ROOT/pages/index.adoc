@@ -1,3 +1,15 @@
-= Hello
+= charm-refresh
 
-world!
+In-place rolling refreshes (upgrades) of stateful https://juju.is/[charmed] applications
+
+[#navigation]
+== Navigation
+
+* I want to: xref:add-to-charm.adoc[]
+* My charm already uses charm-refresh.
+I want to:
+** (WIP) Update the workload
+** (WIP) Update charm-refresh
+** (WIP) Change the charm code or its dependencies
+** xref:troubleshoot.adoc[]
+* I want to: (WIP) Change shared code which is used by a charm that uses charm-refresh

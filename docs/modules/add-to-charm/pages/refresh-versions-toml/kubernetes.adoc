@@ -1,0 +1,39 @@
+= Kubernetes
+
+[#prerequisites]
+== Prerequisites
+
+In the charm's metadata.yaml:
+
+.Example metadata.yaml
+[.wrap,yaml,subs="+attributes"]
+----
+resources:
+  {ex-oci-resource-name}: # <.>
+    type: oci-image
+    upstream-source: {ex-upstream-source-image-name}@{ex-image-digest} # <.>
+
+containers:
+  {ex-container-name}: # <.>
+    resource: {ex-oci-resource-name}
+----
+<.> The charm must have exactly 1 workload OCI image
+<.> The workload's OCI image `upstream-source` must be pinned to a digest
+<.> There must be exactly 1 container that uses the OCI image resource
+
+[#create]
+== Create refresh_versions.toml
+
+At the root of the charm directory (i.e. in the same directory as metadata.yaml), create the `refresh_versions.toml` file
+
+.refresh_versions.toml
+[,toml,subs="+attributes"]
+----
+# {site-url}/latest/refresh-versions-toml/
+
+charm_major = 1 # <.>
+workload = "{ex-workload-version}" # <.>
+----
+<.> Leave this as `1`
+<.> Replace `{ex-workload-version}` with the upstream workload version in the OCI image pinned in metadata.yaml.
+The value must be a string

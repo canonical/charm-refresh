@@ -1,0 +1,31 @@
+= 12. Configure log format
+:page-pagination: sibling
+
+At the beginning of the `ops.CharmBase` `+__init__+` method, add this code:
+
+[,python]
+----
+# Show logger name (module name) in logs
+root_logger = logging.getLogger()
+for handler in root_logger.handlers:
+    if isinstance(handler, ops.log.JujuLogHandler):
+        handler.setFormatter(logging.Formatter("{name}:{message}", style="{"))
+----
+
+.Example charm.py
+[,python,subs="+attributes,+macros"]
+----
+import logging
+
+import ops
+import ops.log
+
+class {ex-charm-class}(ops.CharmBase):
+    def __init__(self, *args):
+        super().__init__(*args)
+        # Show logger name (module name) in logs
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
+            if isinstance(handler, ops.log.JujuLogHandler):
+                handler.setFormatter(logging.Formatter("++{name}:{message}++", style="{"))
+----

@@ -1,0 +1,69 @@
+This page describes the functionality & behavior that Data Platform charmed databases need to implement for in-place refreshes.
+
+It is essential that charm developers understand these requirements and verify that their implementations meet these requirements.
+
+Top-level bullet points are requirements.
+Sub-level bullet points are the rationale for a requirement.
+
+* Refresh units in place
+** To avoid replicating large amounts of data
+** To avoid additional hardware costs
+** To keep existing configuration & integrations with other Juju applications
+
+* Refresh units one at a time
+** To serve read & write traffic to database during refresh
+** To reduce downtime
+** To test new version with subset of traffic (e.g. on one unit) before switching all traffic to new version
+
+* Rollback refreshed units (one at a time) at any time during refresh
+** If there are any issues with new version of charm code or workload
+
+* {empty}
+// tag::high-availability[]
+Maintain high availability while refresh is in progress (for up to multiple weeks)
+// end::high-availability[]
+** To allow user to monitor new version with subset of traffic for extended period of time before switching all traffic to new version
+** For large databases (terabytes, petabytes)
+
+* Pause refresh to allow user to perform manual checks after refresh of units: all, first, or none
+** Automated checks within the charm are not sufficient--for example, if a database client is outdated & incompatible with the new database version
+** Needs to be configurable for different user risk levels
+
+* Allow user to change which units (all, first, or none) the refresh pauses after while a refresh is in progress
+** To allow user to pause after each of the first few units and then proceed with the remaining units
+** To allow user to interrupt a refresh (e.g. to rollback) when a pause was not originally planned
+
+* Warn the user if a refresh is incompatible.
+Allow them to proceed if they accept potential data loss and downtime
+
+* Automatically check the health of the application and all units after each unit refreshes.
+If anything is unhealthy, pause the refresh and notify the user.
+Allow them to proceed if they accept potential data loss and downtime
+
+* Provide pre-refresh health checks (e.g. backup created) & preparations (e.g. switch primary) that the user can run before `juju refresh` and that, when possible, are automatically run after `juju refresh`
+
+* Provide accurate, up-to-date information about the current refresh status, workload status for each unit, workload and charm code versions for each unit, which units' workloads will restart, and what action, if any, the user should take next
+
+* If a unit (e.g. the leader) is in error state (charm raises uncaught exception), allow rollback on other units
+** In case there is a bug in the new charm code version
+** In case the user accidentally refreshed to a different charm code version than they intended
+
+* If a unit (e.g. the leader) is in error state (charm raises uncaught exception), allow refresh on other units with manual user confirmation
+** For an application with several units refreshed, it may be safer to ignore one unhealthy unit and complete the refresh then to rollback all refreshed units
+
+* For all workloads supported by Canonical, allow charms to have a 1:1 mapping between charm revision to workload version (i.e. snap revision or OCI image hash)--or allow charms to have a 1:many mapping if the charm uses immutable (cannot change after charm is deployed) config options that create a 1:1 mapping between charm revision with those config values to workload version.
+** To keep the Data Platform team's options open in the future.
+For example, the PostgreSQL charm may be compatible with an open-source and an enterprise version of a plugin.
+The Data Platform team may ship the open-source and enterprise versions separately by using (1) different Charmhub tracks or (2) config values (using a single charm revision).
+This requirement keeps the choice of option 2 available (hopefully) without requiring breaking changes to the refresh implementation.
+
+* Allow refreshes to and from workloads not supported by Canonical.
+(This is not officially supported--it is only permitted.)
+** To allow user to manually apply an urgent security patch to a workload supported by Canonical (making it become a workload not supported by Canonical) and then later refresh to a workload supported by Canonical
+
+* With rare exceptions,
+// tag::track-compatibility[]
+it should be possible to refresh from any charm released to stable in a Charmhub track to any (semantically) newer charm released to stable in the same track.
+(It should also be possible to rollback.)
+// end::track-compatibility[]
+Any exceptions must be approved by engineering managers and product managers.

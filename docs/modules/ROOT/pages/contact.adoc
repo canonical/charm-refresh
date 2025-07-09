@@ -1,0 +1,40 @@
+= Contact us
+
+[#commercial]
+== For commercial support customers
+
+Contact us via the https://support-portal.canonical.com/[Canonical support portal].
+
+[#community]
+== For community members
+
+[#community-security]
+=== Security issues
+
+Please privately disclose security issues at https://github.com/canonical/charm-refresh/security/advisories/new.
+
+[#community-other]
+=== All other inquiries
+
+Contact us in the https://matrix.to/#/#charmhub-data-platform:ubuntu.com[Data Platform matrix channel].
+
+[#canonical]
+== For Canonical staff
+
+[#canonical-emergency]
+=== Emergency troubleshooting of production deployment
+
+. Consult xref:troubleshoot.adoc[]
+. Contact the developers of the charm(s) you are troubleshooting.
+Their workload-specific and charm-specific knowledge will be needed to determine the safest way to recover if xref:troubleshoot.adoc[] is not sufficient
+. If the charm developers need further assistance, contact the maintainers of charm-refresh
+
+[#canonical-security]
+=== Security issues
+
+Please privately disclose security issues at https://github.com/canonical/charm-refresh/security/advisories/new.
+
+[#canonical-other]
+=== All other inquiries
+
+Contact us in the https://matrix.to/#/#charmhub-data-platform:ubuntu.com[Data Platform matrix channel].

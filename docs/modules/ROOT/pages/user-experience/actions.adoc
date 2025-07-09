@@ -1,0 +1,507 @@
+= Actions
+
+[#pre-refresh-check]
+== pre-refresh-check (optional)
+
+Before the user runs `juju refresh`, they should run this action on the leader unit.
+The leader unit will run pre-refresh health checks (e.g. backup created) & preparations (e.g. switch primary).
+
+Optional: In the user documentation, this step will not be marked as optional (since it improves the safety of the refresh--especially on Kubernetes).
+However, since forgetting to run the action is a common mistake (it has already happened on a production PostgreSQL charm), it is not required.
+
+This action will fail if run before a rollback.
+
+.actions.yaml
+[,yaml]
+----
+include::add-to-charm:example$actions.yaml[tag=pre-refresh-check]
+----
+
+[#pre-refresh-check-in-progress]
+=== Refresh in progress
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/leader pre-refresh-check
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-0
+
+Waiting for task 2...
+Action id 2 failed: Refresh already in progress
+----
+
+[#pre-refresh-check-wrong-unit]
+=== Non-leader unit
+
+[.wrap,subs="+attributes"]
+----
+Action id 2 failed: Must run action on leader unit. (e.g. `juju run {ex-charm}/leader pre-refresh-check`)
+----
+
+[#pre-refresh-check-failed]
+=== Health checks & preparations failed
+
+[.wrap,subs="+attributes"]
+----
+Action id 2 failed: Charm is not ready for refresh. Pre-refresh check failed: {ex-precheck-failure}
+----
+
+[#pre-refresh-check-succeeded]
+=== Health checks & preparations succeeded
+
+[#pre-refresh-check-succeeded-kubernetes]
+==== Kubernetes
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/leader pre-refresh-check
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-0
+
+Waiting for task 2...
+result: |-
+  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/{ex-charm}/docs/refresh/{ex-charm-version}
+  After the refresh has started, use this command to rollback (copy this down in case you need it later):
+  `{ex-rollback-command}`
+----
+
+[#pre-refresh-check-succeeded-machines]
+==== Machines
+
+[.wrap,subs="+attributes"]
+----
+result: |-
+  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/{ex-charm-vm}/docs/refresh/{ex-charm-version}
+  After the refresh has started, use this command to rollback:
+  `juju refresh {ex-charm-vm} --revision {ex-charm-rev}`
+----
+
+[#force-refresh-start]
+== force-refresh-start
+
+If the refresh is incompatible, the automatic pre-refresh health checks & preparations fail, or the refresh is to a workload version not supported by Canonical, the user will be prompted to rollback.
+If they accept potential data loss & downtime and want to proceed anyways (e.g. to force a downgrade), the user can run this action on the first unit to refresh.
+
+After this action is run and the first unit's workload refreshes (machines) or attempts to start (Kubernetes), the compatibility, pre-refresh, and workload support checks will not run again (unless the user runs `juju refresh` [and if `juju refresh` is a rollback, the pre-refresh and workload support checks will still not run again]).
+
+.actions.yaml
+[,yaml,subs="+attributes"]
+----
+include::add-to-charm:example$actions.yaml[tag=force-refresh-start]
+----
+<1> `{ex-workload}` will be replaced with the upstream workload name
+
+[#force-refresh-start-wrong-unit]
+=== Unit not first to refresh
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/1 force-refresh-start
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-1
+
+Waiting for task 2...
+Action id 2 failed: Must run action on unit 2
+----
+
+[#force-refresh-start-not-in-progress]
+=== Refresh not in progress
+
+[.wrap]
+----
+Action id 2 failed: No refresh in progress
+----
+
+[#force-refresh-start-in-progress-unknown]
+=== (Machines only) Not possible to determine if a refresh is in progress
+
+[.wrap]
+----
+Action id 2 failed: Determining if a refresh is in progress. Check `juju status` and consider retrying this action
+----
+
+[#force-refresh-start-without-false]
+=== Without 1+ parameters as false
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-2
+
+Waiting for task 2...
+Action id 2 failed: Must run with at least one of `check-compatibility`, `run-pre-refresh-checks`, or `check-workload-container` parameters `=false`
+----
+
+[#force-refresh-start-with-false]
+=== With 1+ parameters as false
+
+[#check-workload-container]
+==== Part 1: check-workload-container
+
+[#check-workload-container-skipped]
+===== check-workload-container=false
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...] check-workload-container=false
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-2
+
+Waiting for task 2...
+12:15:34 Skipping check that refresh is to {ex-workload} container version that has been validated to work with the charm revision
+----
+
+[#check-workload-container-succeeded]
+===== check-workload-container=true and check succeeded
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...]
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-2
+
+Waiting for task 2...
+12:15:34 Checked that refresh is to {ex-workload} container version that has been validated to work with the charm revision
+----
+
+[#check-workload-container-failed]
+===== check-workload-container=true and check failed
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...]
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-2
+
+Waiting for task 2...
+Action id 2 failed: Refresh is to {ex-workload} container version that has not been validated to work with the charm revision. Rollback by running `{ex-rollback-command}`
+----
+
+[#check-compatibility]
+==== Part 2: check-compatibility
+
+[#check-compatibility-skipped]
+===== check-compatibility=false
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...] check-compatibility=false
+[...]  # check-workload-container
+12:15:34 Skipping check for compatibility with previous {ex-workload} version and charm revision
+----
+
+[#check-compatibility-succeeded]
+===== check-compatibility=true and check succeeded
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...]
+[...]  # check-workload-container
+12:15:34 Checked that refresh from previous {ex-workload} version and charm revision to current versions is compatible
+----
+
+[#check-compatibility-failed]
+===== check-compatibility=true and check failed
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...]
+[...]  # check-workload-container
+----
+
+.Kubernetes
+[.wrap,subs="+attributes"]
+----
+Action id 2 failed: Refresh incompatible. Rollback by running `{ex-rollback-command}`
+----
+
+.Machines
+[.wrap]
+----
+Action id 2 failed: Refresh incompatible. Rollback with `juju refresh`
+----
+
+[#run-pre-refresh-checks]
+==== Part 3: run-pre-refresh-checks
+
+[#run-pre-refresh-checks-skipped]
+===== run-pre-refresh-checks=false
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...] run-pre-refresh-checks=false
+[...]  # check-workload-container
+[...]  # check-compatibility
+12:15:39 Skipping pre-refresh checks
+----
+
+[#run-pre-refresh-checks-succeeded]
+===== run-pre-refresh-checks=true and checks succeeded
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...] run-pre-refresh-checks=false
+[...]  # check-workload-container
+[...]  # check-compatibility
+12:15:34 Running pre-refresh checks
+12:15:39 Pre-refresh checks successful
+----
+
+[#run-pre-refresh-checks-failed]
+===== run-pre-refresh-checks=true and check failed
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...] run-pre-refresh-checks=false
+[...]  # check-workload-container
+[...]  # check-compatibility
+12:15:34 Running pre-refresh checks
+----
+
+.Kubernetes
+[.wrap,subs="+attributes"]
+----
+Action id 2 failed: Pre-refresh check failed: {ex-precheck-failure}. Rollback by running `{ex-rollback-command}`
+----
+
+.Machines
+[.wrap,subs="+attributes"]
+----
+Action id 2 failed: Pre-refresh check failed: {ex-precheck-failure}. Rollback with `juju refresh`
+----
+
+[#force-refresh-start-succeeded]
+==== Part 4: All checks succeeded or were skipped
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/2 force-refresh-start [...]
+[...]  # check-workload-container
+[...]  # check-compatibility
+[...]  # run-pre-refresh-checks
+----
+
+.Kubernetes
+[.wrap,subs="+attributes"]
+----
+12:15:39 {ex-workload} refreshed. Attempting to start {ex-workload}
+
+result: Refreshed unit 2
+----
+
+.Machines
+[.wrap]
+----
+12:15:39 Refreshing unit 2
+
+result: Refreshed unit 2
+----
+
+[#resume-refresh]
+== resume-refresh
+
+After the user runs `juju refresh`, if xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is set to `all` or `first`, the refresh will pause.
+
+The user is expected to manually check that refreshed units are healthy and that clients connected to the refreshed units are healthy.
+For example, the user could check that the transactions per second, over a period of several days, are similar on refreshed and non-refreshed units.
+These manual checks supplement the automatic checks in the charm.
+(If the automatic checks fail, the charm will pause the refresh regardless of the value of xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh].)
+
+When the user is ready to continue the refresh, they should run this action.
+
+.actions.yaml
+[,yaml]
+----
+include::add-to-charm:example$actions.yaml[tag=resume-refresh]
+----
+
+[#resume-refresh-which-unit]
+=== Which unit the action is run on
+
+[#resume-refresh-which-unit-kubernetes]
+==== Kubernetes
+
+On Kubernetes, the user should run this action on the leader unit.
+
+If the StatefulSet partition is lowered and then quickly raised, the Juju agent may hang.
+This is a Juju bug: https://bugs.launchpad.net/juju/+bug/2073473.
+To avoid a race condition, only the leader unit lowers the partition.
+(If that bug were resolved, this action could be run on any unit.)
+
+To improve the robustness of rollbacks, this action runs on the leader unit instead of the next unit to refresh.
+If a unit is refreshed to an incorrect or buggy charm code version, its charm code may raise an uncaught exception and may not be able to process this action to rollback its unit.
+(The improvement in robustness comes from this action running on a unit that is different from the unit that needs to rollback.)
+This is different from machines, where the charm code is rolled back separately from the workload and the charm code on a unit needs to run to rollback the workload (i.e. snap) for that unit.
+
+If the charm code on the leader unit raises an uncaught exception, the user can manually patch (e.g. using kubectl) the StatefulSet partition to rollback the leader unit (after `juju refresh` has been run to start the rollback).
+From the perspective of the refresh design, if the user is instructed properly, this is safe (since it uses the same mechanism as a normal rollback).
+However, any rollback has risk and there may be additional risk if the leader unit did something (e.g. modified a relation databag in a previous Juju event) before it raised an uncaught exception.
+
+[#resume-refresh-which-unit-machines]
+==== Machines
+
+On machines, the user should run this action on the next unit to refresh.
+That unit is shown in the app status.
+
+This improves the robustness of rollbacks by requiring only the charm code on the unit that is rolling back to be healthy (i.e. not raising an uncaught exception).
+(If the action was run on the leader unit, rolling back a unit would require the charm code on both the leader unit & the unit rolling back to be healthy.)
+
+If `check-health-of-refreshed-units=true` (default), a unit rolling back will also check that units that have already rolled back are healthy.
+
+In case a refreshed unit is unhealthy and the user wants to force the refresh to continue, `check-health-of-refreshed-units=false` allows the user to run this action on any unit that is not up-to-date--so that they can skip over the unhealthy unit.
+However, the user should be instructed to follow the refresh order (usually highest to lowest unit number) even though they have the power to refresh any unit that is not up-to-date.
+
+[#resume-refresh-not-in-progress]
+=== Refresh not in progress
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/leader resume-refresh
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-0
+
+Waiting for task 2...
+Action id 2 failed: No refresh in progress
+----
+
+[#resume-refresh-wrong-unit]
+=== Incorrect unit
+
+[#resume-refresh-wrong-unit-kubernetes]
+==== Kubernetes
+
+[.wrap,subs="+attributes"]
+----
+Action id 2 failed: Must run action on leader unit. (e.g. `juju run {ex-charm}/leader resume-refresh`)
+----
+
+[#resume-refresh-wrong-unit-machines]
+==== Machines
+
+[#resume-refresh-wrong-unit-machines-check-health-true]
+===== check-health-of-refreshed-units=true
+
+[.wrap]
+----
+Action id 2 failed: Must run action on unit 1
+----
+
+[#resume-refresh-wrong-unit-machines-check-health-false]
+===== check-health-of-refreshed-units=false and unit already up-to-date
+
+[.wrap]
+----
+Action id 2 failed: Unit already refreshed
+----
+
+[#check-health-of-refreshed-units-false]
+=== check-health-of-refreshed-units=false
+
+[#check-health-of-refreshed-units-false-kubernetes]
+==== Kubernetes
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm}/leader resume-refresh check-health-of-refreshed-units=false
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm}-0
+
+Waiting for task 2...
+12:15:39 Ignoring health of refreshed units
+
+result: Attempting to refresh unit 1
+----
+
+"Attempting to" is included because on Kubernetes we only control the partition, not which units refresh.
+Kubernetes may not refresh a unit even if the partition allows it (e.g. if the charm container of a higher unit is not ready).
+
+[#check-health-of-refreshed-units-false-machines]
+==== Machines
+
+[.wrap,console,subs="+attributes"]
+----
+$ juju run {ex-charm-vm}/1 resume-refresh check-health-of-refreshed-units=false
+Running operation 1 with 1 task
+  - task 2 on unit-{ex-charm-vm}-1
+
+Waiting for task 2...
+12:15:39 Ignoring health of refreshed units
+12:15:39 Refreshing unit 1
+
+result: Refreshed unit 1
+----
+
+[#resume-refresh-check-health-true]
+=== check-health-of-refreshed-units=true
+
+[#resume-refresh-pause-after-none]
+==== pause_after_unit_refresh is none
+
+[.wrap]
+----
+Action id 2 failed: `pause_after_unit_refresh` config is set to `none`. This action is not applicable.
+----
+
+[#resume-refresh-not-started]
+==== Refresh not started
+
+(Refresh is incompatible, the automatic pre-refresh health checks & preparations failed, or the refresh is to a workload version not supported by Canonical--and <<force-refresh-start>> has not been successfully run)
+
+[.wrap]
+----
+Action id 2 failed: Unit 2 is unhealthy. Refresh will not resume.
+----
+
+[#resume-refresh-unhealthy]
+==== 1+ refreshed units are unhealthy
+
+[.wrap]
+----
+Action id 2 failed: Unit 2 is unhealthy. Refresh will not resume.
+----
+
+[#resume-refresh-succeeded]
+==== Refresh successfully resumed
+
+[#resume-refresh-succeeded-pause-after-first]
+===== pause_after_unit_refresh is first
+
+[#resume-refresh-succeeded-pause-after-first-kubernetes]
+====== Kubernetes
+
+[.wrap]
+----
+result: Refresh resumed. Unit 1 is refreshing next
+----
+
+[#resume-refresh-succeeded-pause-after-first-machines]
+====== Machines
+
+[.wrap]
+----
+12:15:39 Refresh resumed. Refreshing unit 1
+
+result: Refresh resumed. Unit 1 has refreshed
+----
+
+[#resume-refresh-succeeded-pause-after-all]
+===== pause_after_unit_refresh is all
+
+[#resume-refresh-succeeded-pause-after-all-kubernetes]
+====== Kubernetes
+
+[.wrap]
+----
+result: Unit 1 is refreshing next
+----
+
+[#resume-refresh-succeeded-pause-after-all-machines]
+====== Machines
+
+[.wrap]
+----
+12:15:39 Refreshing unit 1
+
+result: Refreshed unit 1
+----

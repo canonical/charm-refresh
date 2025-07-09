@@ -20,8 +20,6 @@ include::add-to-charm:example$actions.yaml[tag=pre-refresh-check]
 [#pre-refresh-check-tearing-down]
 === Unit tearing down
 
-// TODO approval
-
 [.wrap,console,subs="+attributes"]
 ----
 $ juju run {ex-charm}/leader pre-refresh-check
@@ -104,8 +102,6 @@ include::add-to-charm:example$actions.yaml[tag=force-refresh-start]
 [#force-refresh-start-tearing-down]
 === Unit tearing down
 
-// TODO approval
-
 [.wrap,console,subs="+attributes"]
 ----
 $ juju run {ex-charm}/2 force-refresh-start
@@ -156,8 +152,6 @@ Action id 2 failed: Must run with at least one of `check-compatibility`, `run-pr
 [#force-refresh-start-outdated]
 === First unit to refresh has outdated charm code
 
-// TODO approval
-
 [#force-refresh-start-outdated-kubernetes]
 ==== Kubernetes
 
@@ -176,8 +170,6 @@ Action id 2 failed: This unit is waiting for a Juju upgrade-charm or config-chan
 
 [#force-refresh-start-already-started]
 === Refresh already started
-
-// TODO approval
 
 [.wrap]
 ----
@@ -333,7 +325,6 @@ $ juju run {ex-charm}/2 force-refresh-start [...]
 [...]  # run-pre-refresh-checks
 ----
 
-// TODO approval for changes k8s
 .Kubernetes
 [.wrap,subs="+attributes"]
 ----
@@ -417,7 +408,6 @@ Action id 2 failed: No refresh in progress
 
 [#resume-refresh-in-progress-unknown]
 === (Machines only) Not possible to determine if a refresh is in progress
-// TODO approval
 
 [.wrap]
 ----

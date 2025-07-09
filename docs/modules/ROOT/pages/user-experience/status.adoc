@@ -15,7 +15,6 @@ These statuses have higher priority than any other application status in a charm
 
 [#kubernetes-app-not-trusted]
 === (Kubernetes only) Application not trusted
-// TODO approval
 
 The charm has not been granted permission to control the Kubernetes StatefulSet partition
 
@@ -36,7 +35,6 @@ include::partial$app-status.adoc[]
 
 [#machines-in-progress-unknown]
 === (Machines only) Not possible to determine if a refresh is in progress
-// TODO approval
 
 On machines, in certain cases, it is not possible to determine if a refresh is in progress.
 
@@ -80,7 +78,6 @@ unit-{ex-charm-vm}-0: 11:34:35 INFO unit.{ex-charm-vm}/0.juju-log charm_refresh:
 
 [#kubernetes-last-unit-refreshing]
 === (Kubernetes only) Last unit is refreshing
-// TODO approval
 
 If the Kubernetes StatefulSet partition has been set to allow the last unit to refresh, the refresh cannot be halted using the xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh config option].
 
@@ -93,7 +90,6 @@ include::partial$app-status.adoc[]
 
 [#machines-single-unit-in-progress]
 === (Machines only) Single unit
-// TODO approval
 
 Refresh in progress for a single-unit application
 

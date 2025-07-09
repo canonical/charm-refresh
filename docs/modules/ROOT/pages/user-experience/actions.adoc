@@ -393,8 +393,8 @@ If `check-health-of-refreshed-units=true` (default), a unit rolling back will al
 In case a refreshed unit is unhealthy and the user wants to force the refresh to continue, `check-health-of-refreshed-units=false` allows the user to run this action on any unit that is not up-to-date--so that they can skip over the unhealthy unit.
 However, the user should be instructed to follow the refresh order (usually highest to lowest unit number) even though they have the power to refresh any unit that is not up-to-date.
 
-[#resume-refresh-not-in-progress]
-=== Refresh not in progress
+[#resume-refresh-tearing-down]
+=== Unit tearing down
 
 [.wrap,console,subs="+attributes"]
 ----
@@ -403,6 +403,14 @@ Running operation 1 with 1 task
   - task 2 on unit-{ex-charm}-0
 
 Waiting for task 2...
+Action id 2 failed: Unit tearing down
+----
+
+[#resume-refresh-not-in-progress]
+=== Refresh not in progress
+
+[.wrap]
+----
 Action id 2 failed: No refresh in progress
 ----
 

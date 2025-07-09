@@ -368,3 +368,14 @@ Units 1 and 0 have not refreshed.
 :status-1-message: {status-0-message}
 :status-2-message: Router 8.0.37; Snap revision {ex-snap-rev-to}; Charm revision {ex-charm-rev-to}
 include::partial$unit-statuses.adoc[]
+
+[#machines-no-upgrade-charm-event]
+==== Charm code refreshed without upgrade-charm event
+
+If a unit is raising an uncaught exception, Juju may refresh the charm code without an upgrade-charm event (https://bugs.launchpad.net/juju/+bug/2068500).
+If this happens, Juju may also refresh that unit's charm code to a version that is not up-to-date.
+
+:status-charm: {ex-charm-vm}
+:status-type: maintenance
+:status-message: Waiting for Juju upgrade-charm or config-changed event. See `juju debug-log`
+include::partial$highest-unit-status.adoc[]

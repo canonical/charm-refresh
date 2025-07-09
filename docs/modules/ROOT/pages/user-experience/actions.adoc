@@ -17,8 +17,10 @@ This action will fail if run before a rollback.
 include::add-to-charm:example$actions.yaml[tag=pre-refresh-check]
 ----
 
-[#pre-refresh-check-in-progress]
-=== Refresh in progress
+[#pre-refresh-check-tearing-down]
+=== Unit tearing down
+
+// TODO approval
 
 [.wrap,console,subs="+attributes"]
 ----
@@ -27,6 +29,14 @@ Running operation 1 with 1 task
   - task 2 on unit-{ex-charm}-0
 
 Waiting for task 2...
+Action id 2 failed: Unit tearing down
+----
+
+[#pre-refresh-check-in-progress]
+=== Refresh in progress
+
+[.wrap]
+----
 Action id 2 failed: Refresh already in progress
 ----
 
@@ -91,16 +101,26 @@ include::add-to-charm:example$actions.yaml[tag=force-refresh-start]
 ----
 <1> `{ex-workload}` will be replaced with the upstream workload name
 
-[#force-refresh-start-wrong-unit]
-=== Unit not first to refresh
+[#force-refresh-start-tearing-down]
+=== Unit tearing down
+
+// TODO approval
 
 [.wrap,console,subs="+attributes"]
 ----
-$ juju run {ex-charm}/1 force-refresh-start
+$ juju run {ex-charm}/2 force-refresh-start
 Running operation 1 with 1 task
-  - task 2 on unit-{ex-charm}-1
+  - task 2 on unit-{ex-charm}-2
 
 Waiting for task 2...
+Action id 2 failed: Unit tearing down
+----
+
+[#force-refresh-start-wrong-unit]
+=== Unit not first to refresh
+
+[.wrap]
+----
 Action id 2 failed: Must run action on unit 2
 ----
 
@@ -131,6 +151,37 @@ Running operation 1 with 1 task
 
 Waiting for task 2...
 Action id 2 failed: Must run with at least one of `check-compatibility`, `run-pre-refresh-checks`, or `check-workload-container` parameters `=false`
+----
+
+[#force-refresh-start-outdated]
+=== First unit to refresh has outdated charm code
+
+// TODO approval
+
+[#force-refresh-start-outdated-kubernetes]
+==== Kubernetes
+
+[.wrap]
+----
+Action id 2 failed: Unit 2 is outdated and waiting for its pod to be updated by Kubernetes
+----
+
+[#force-refresh-start-outdated-machines]
+==== Machines
+
+[.wrap]
+----
+Action id 2 failed: This unit is waiting for a Juju upgrade-charm or config-changed event. See `juju debug-log`
+----
+
+[#force-refresh-start-already-started]
+=== Refresh already started
+
+// TODO approval
+
+[.wrap]
+----
+Action id 2 failed: Unit 2 already refreshed
 ----
 
 [#force-refresh-start-with-false]
@@ -282,12 +333,11 @@ $ juju run {ex-charm}/2 force-refresh-start [...]
 [...]  # run-pre-refresh-checks
 ----
 
+// TODO approval for changes k8s
 .Kubernetes
 [.wrap,subs="+attributes"]
 ----
-12:15:39 {ex-workload} refreshed. Attempting to start {ex-workload}
-
-result: Refreshed unit 2
+result: {ex-workload} refreshed on unit 2. Starting {ex-workload} on unit 2
 ----
 
 .Machines
@@ -363,6 +413,15 @@ Running operation 1 with 1 task
 
 Waiting for task 2...
 Action id 2 failed: No refresh in progress
+----
+
+[#resume-refresh-in-progress-unknown]
+=== (Machines only) Not possible to determine if a refresh is in progress
+// TODO approval
+
+[.wrap]
+----
+Action id 2 failed: Determining if a refresh is in progress. Check `juju status` and consider retrying this action
 ----
 
 [#resume-refresh-wrong-unit]

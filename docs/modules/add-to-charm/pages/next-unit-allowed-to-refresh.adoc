@@ -140,7 +140,7 @@ class {ex-charm-class}(ops.CharmBase):
         except Unhealthy as exception:
             self.unit.status = ops.BlockedStatus(exception.reason)
         else:
-            self.refresh.next_unit_allowed_to_refresh = True
+            refresh.next_unit_allowed_to_refresh = True
 
     def __init__(self, *args):
         # [...]

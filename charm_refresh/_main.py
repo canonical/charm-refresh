@@ -153,7 +153,7 @@ class CharmSpecificCommon(abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def run_pre_refresh_checks_after_1_unit_refreshed() -> None:
-        """Run pre-refresh health checks & preparations after the first unit has already refreshed.
+        """Run pre-refresh health checks & preparations after the first unit has already refreshed
 
         https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/pre-refresh-checks/
 
@@ -162,7 +162,7 @@ class CharmSpecificCommon(abc.ABC):
         """
 
     def run_pre_refresh_checks_before_any_units_refreshed(self) -> None:
-        """Run pre-refresh health checks & preparations before any unit is refreshed.
+        """Run pre-refresh health checks & preparations before any unit is refreshed
 
         https://canonical-charm-refresh.readthedocs-hosted.com/latest/add-to-charm/pre-refresh-checks/
 
@@ -2912,7 +2912,7 @@ class Machines(Common):
         # In this example, the highest unit was unable to update its databag while charm revision
         # 613 and snap revision 183 were installed. After the rollback starts, from the perspective
         # of the other units, the highest unit's databag says that snap revision 182 and charm
-        # revision 602 are installed (and, therefore, a refresh is not in progress)— but, in
+        # revision 602 are installed (and, therefore, a refresh is not in progress)—but, in
         # reality, snap revision 183 is installed.
         # To detect this, we need a mechanism to determine if a unit's databag is outdated.
         # If the charm revision in the databag is different from this unit's charm revision, we

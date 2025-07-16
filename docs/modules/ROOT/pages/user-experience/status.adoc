@@ -13,6 +13,16 @@ When considering changes to status messages, assume that unit numbers are 2 char
 
 These statuses have higher priority than any other application status in a charm.
 
+[#kubernetes-app-not-trusted]
+=== (Kubernetes only) Application not trusted
+
+The charm has not been granted permission to control the Kubernetes StatefulSet partition
+
+:status-charm: {ex-charm}
+:status-type: blocked
+:status-message: Run `juju trust {ex-charm} --scope=cluster`. Needed for in-place refreshes
+include::partial$app-status.adoc[]
+
 [#invalid-pause-after-unit-refresh]
 === pause_after_unit_refresh set to invalid value
 
@@ -21,6 +31,26 @@ xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refre
 :status-charm: {ex-charm}
 :status-type: blocked
 :status-message: pause_after_unit_refresh config must be set to "all", "first", or "none"
+include::partial$app-status.adoc[]
+
+[#machines-in-progress-unknown]
+=== (Machines only) Not possible to determine if a refresh is in progress
+
+On machines, in certain cases, it is not possible to determine if a refresh is in progress.
+
+For example, it is not (easily) possible to immediately differentiate between the following cases:
+
+* After `juju refresh`, if the charm code is refreshed and the workload version is identical (i.e. same snap revision).
+(A refresh is not in progress)
+* User refreshes from charm revision {ex-charm-rev} to {ex-charm-rev-to}. Highest unit's charm code refreshes snap from revision {ex-snap-rev} to {ex-snap-rev-to} and raises an uncaught exception in the same Juju event.
+User refreshes (rollback) to charm revision {ex-charm-rev}.
+(A refresh is in progress)
+
+In both of these examples, after a few Juju events (usually a few seconds), it will be possible to determine if a refresh is in progress--as long as no units' charm code is raising an uncaught exception.
+
+:status-charm: {ex-charm-vm}
+:status-type: maintenance
+:status-message: Determining if a refresh is in progress
 include::partial$app-status.adoc[]
 
 [#machines-incompatible]
@@ -45,6 +75,29 @@ For example:
 ----
 unit-{ex-charm-vm}-0: 11:34:35 INFO unit.{ex-charm-vm}/0.juju-log charm_refresh:Refresh incompatible. Rollback with `juju refresh`. Continuing this refresh may cause data loss and/or downtime. The refresh can be forced to continue with the `force-refresh-start` action and the `check-compatibility` parameter. Run `juju show-action {ex-charm-vm} force-refresh-start` for more information
 ----
+
+[#kubernetes-last-unit-refreshing]
+=== (Kubernetes only) Last unit is refreshing
+
+If the Kubernetes StatefulSet partition has been set to allow the last unit to refresh, the refresh cannot be halted using the xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh config option].
+
+At that point, a rollback is only possible if Kubernetes decides not to refresh the last unit (because the up-to-date units' pod readiness probes have not all succeeded) and the user runs `juju refresh`.
+
+:status-charm: {ex-charm}
+:status-type: maintenance
+:status-message: Refreshing. To rollback, see docs or `juju debug-log`
+include::partial$app-status.adoc[]
+
+[#machines-single-unit-in-progress]
+=== (Machines only) Single unit
+
+Refresh in progress for a single-unit application
+
+:status-charm: {ex-charm-vm}
+:status-type: maintenance
+:status-rev: {ex-charm-rev-to}
+:status-message: Refreshing. To rollback, `juju refresh --revision {ex-charm-rev}`
+include::partial$app-status-rev.adoc[]
 
 [#in-progress-pause]
 === Refresh will pause for manual confirmation
@@ -315,3 +368,14 @@ Units 1 and 0 have not refreshed.
 :status-1-message: {status-0-message}
 :status-2-message: Router 8.0.37; Snap revision {ex-snap-rev-to}; Charm revision {ex-charm-rev-to}
 include::partial$unit-statuses.adoc[]
+
+[#machines-no-upgrade-charm-event]
+==== Charm code refreshed without upgrade-charm event
+
+If a unit is raising an uncaught exception, Juju may refresh the charm code without an upgrade-charm event (https://bugs.launchpad.net/juju/+bug/2068500).
+If this happens, Juju may also refresh that unit's charm code to a version that is not up-to-date.
+
+:status-charm: {ex-charm-vm}
+:status-type: maintenance
+:status-message: Waiting for Juju upgrade-charm or config-changed event. See `juju debug-log`
+include::partial$highest-unit-status.adoc[]

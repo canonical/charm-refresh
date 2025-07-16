@@ -1,14 +1,5 @@
 = User experience
 
-[WARNING]
-====
-This documentation is (temporarily) outdated.
-
-This reflects the currently approved user experience--not the actual user experience currently implemented in charm-refresh.
-
-The user experience currently implemented in charm-refresh is pending approval and can be viewed here: https://github.com/canonical/charm-refresh/pull/13
-====
-
 NOTE: Check that the version of the documentation website you're currently viewing ({page-component-display-version}) matches the version of charm-refresh you'd like to view the user experience for
 
 Description of how the user interacts with and experiences an in-place refresh of a single Juju application via:

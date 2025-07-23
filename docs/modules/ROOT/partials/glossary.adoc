@@ -1,3 +1,5 @@
+foobar
+
 This page precisely defines terms used in this documentation, the log messages, and the source code.
 
 Understanding the full nuances of these definitions is a prerequisite to successfully understanding and following the documentation.

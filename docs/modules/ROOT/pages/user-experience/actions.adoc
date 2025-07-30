@@ -342,12 +342,12 @@ result: Refreshed unit 2
 [#resume-refresh]
 == resume-refresh
 
-After the user runs `juju refresh`, if xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is set to `all` or `first`, the refresh will pause.
+After the user runs `juju refresh`, if xref:user-experience/config.adoc#pause-after-unit-refresh[pause-after-unit-refresh] is set to `all` or `first`, the refresh will pause.
 
 The user is expected to manually check that refreshed units are healthy and that clients connected to the refreshed units are healthy.
 For example, the user could check that the transactions per second, over a period of several days, are similar on refreshed and non-refreshed units.
 These manual checks supplement the automatic checks in the charm.
-(If the automatic checks fail, the charm will pause the refresh regardless of the value of xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh].)
+(If the automatic checks fail, the charm will pause the refresh regardless of the value of xref:user-experience/config.adoc#pause-after-unit-refresh[pause-after-unit-refresh].)
 
 When the user is ready to continue the refresh, they should run this action.
 
@@ -493,11 +493,11 @@ result: Refreshed unit 1
 === check-health-of-refreshed-units=true
 
 [#resume-refresh-pause-after-none]
-==== pause_after_unit_refresh is none
+==== pause-after-unit-refresh is none
 
 [.wrap]
 ----
-Action id 2 failed: `pause_after_unit_refresh` config is set to `none`. This action is not applicable.
+Action id 2 failed: `pause-after-unit-refresh` config is set to `none`. This action is not applicable.
 ----
 
 [#resume-refresh-not-started]
@@ -522,7 +522,7 @@ Action id 2 failed: Unit 2 is unhealthy. Refresh will not resume.
 ==== Refresh successfully resumed
 
 [#resume-refresh-succeeded-pause-after-first]
-===== pause_after_unit_refresh is first
+===== pause-after-unit-refresh is first
 
 [#resume-refresh-succeeded-pause-after-first-kubernetes]
 ====== Kubernetes
@@ -543,7 +543,7 @@ result: Refresh resumed. Unit 1 has refreshed
 ----
 
 [#resume-refresh-succeeded-pause-after-all]
-===== pause_after_unit_refresh is all
+===== pause-after-unit-refresh is all
 
 [#resume-refresh-succeeded-pause-after-all-kubernetes]
 ====== Kubernetes

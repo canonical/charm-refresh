@@ -348,7 +348,7 @@ def _convert_to_ops_status(
 
 @functools.total_ordering
 class _PauseAfter(str, enum.Enum):
-    """`pause_after_unit_refresh` config option"""
+    """`pause-after-unit-refresh` config option"""
 
     NONE = "none"
     FIRST = "first"
@@ -608,7 +608,7 @@ class Kubernetes(Common):
         ):
             logger.info(
                 "Allowed next unit to refresh if app's StatefulSet controller revision is "
-                f"{self._unit_controller_revision} and if permitted by pause_after_unit_refresh "
+                f"{self._unit_controller_revision} and if permitted by pause-after-unit-refresh "
                 "config option or resume-refresh action"
             )
             self._relation.my_unit[
@@ -1174,7 +1174,7 @@ class Kubernetes(Common):
             return
         if self._pause_after is _PauseAfter.UNKNOWN:
             self._app_status_higher_priority = charm.BlockedStatus(
-                'pause_after_unit_refresh config must be set to "all", "first", or "none"'
+                'pause-after-unit-refresh config must be set to "all", "first", or "none"'
             )
         if not self._in_progress:
             if self._get_partition() != 0:
@@ -1192,7 +1192,7 @@ class Kubernetes(Common):
             and action.check_health_of_refreshed_units
         ):
             action.fail(
-                "`pause_after_unit_refresh` config is set to `none`. This action is not applicable."
+                "`pause-after-unit-refresh` config is set to `none`. This action is not applicable."
             )
             # Do not log any additional information to action output
             action = None
@@ -1263,7 +1263,7 @@ class Kubernetes(Common):
                         reason = "resume-refresh action ran"
                     else:
                         reason = (
-                            f"pause_after_unit_refresh config is {repr(self._pause_after.value)}"
+                            f"pause-after-unit-refresh config is {repr(self._pause_after.value)}"
                         )
                         if self._pause_after is _PauseAfter.FIRST:
                             reason += " and second unit already refreshed"
@@ -1289,7 +1289,7 @@ class Kubernetes(Common):
                     allow_next_unit_to_refresh = False
                     reason = (
                         "waiting for user to run resume-refresh action "
-                        f"(pause_after_unit_refresh_config is {repr(self._pause_after.value)})"
+                        f"(pause-after-unit-refresh config is {repr(self._pause_after.value)})"
                     )
 
         if allow_next_unit_to_refresh:
@@ -1324,7 +1324,7 @@ class Kubernetes(Common):
             # Last unit is able to refresh
             # At this point, a rollback is probably only possible if Kubernetes decides to not
             # refresh the last unit even though the partition allows it to refresh. The
-            # pause_after_unit_refresh config option cannot be used to halt the refresh since the
+            # pause-after-unit-refresh config option cannot be used to halt the refresh since the
             # partition is already set to the lowest unit.
             self._app_status_higher_priority = charm.MaintenanceStatus(
                 "Refreshing. To rollback, see docs or `juju debug-log`"
@@ -1341,7 +1341,7 @@ class Kubernetes(Common):
         else:
             self._app_status_higher_priority = charm.MaintenanceStatus(
                 f"Refreshing. To pause refresh, run `juju config {charm.app} "
-                "pause_after_unit_refresh=all`"
+                "pause-after-unit-refresh=all`"
             )
         assert self._app_status_higher_priority is not None
         charm.app_status = self._app_status_higher_priority
@@ -1527,7 +1527,7 @@ class Kubernetes(Common):
         # To determine the current config value, we can look at the config value in the databag of
         # up-to-date units
         self._relation.my_unit["pause_after_unit_refresh_config"] = charm.config[
-            "pause_after_unit_refresh"
+            "pause-after-unit-refresh"
         ]
 
         self._pod_uids_of_units_that_are_tearing_down_local_state = (
@@ -1761,7 +1761,7 @@ class Kubernetes(Common):
             for unit in most_up_to_date_units
         )
         # Exclude `None` values (for scale up/down or initial install) to avoid displaying app
-        # status that says pause_after_unit_refresh is set to invalid value
+        # status that says pause-after-unit-refresh is set to invalid value
         pause_after_values = (value for value in pause_after_values if value is not None)
         self._pause_after = max(_PauseAfter(value) for value in pause_after_values)
 
@@ -2020,7 +2020,7 @@ class Machines(Common):
             logger.info(
                 f"Allowed next unit to refresh if this unit's snap revision "
                 f"({self._relation.my_unit['installed_snap_revision']}) & databag are up-to-date "
-                "and if permitted by pause_after_unit_refresh config option or resume-refresh "
+                "and if permitted by pause-after-unit-refresh config option or resume-refresh "
                 "action"
             )
             self._relation.my_unit[
@@ -2548,7 +2548,7 @@ class Machines(Common):
 
         if self._pause_after is _PauseAfter.UNKNOWN:
             self._app_status_higher_priority = charm.BlockedStatus(
-                'pause_after_unit_refresh config must be set to "all", "first", or "none"'
+                'pause-after-unit-refresh config must be set to "all", "first", or "none"'
             )
             charm.app_status = self._app_status_higher_priority
             return
@@ -2632,7 +2632,7 @@ class Machines(Common):
             return
         self._app_status_higher_priority = charm.MaintenanceStatus(
             f"Refreshing. To pause refresh, run `juju config {charm.app} "
-            "pause_after_unit_refresh=all`"
+            "pause-after-unit-refresh=all`"
         )
         charm.app_status = self._app_status_higher_priority
 
@@ -2735,7 +2735,7 @@ class Machines(Common):
 
         if self._pause_after is _PauseAfter.NONE and action:
             action.fail(
-                "`pause_after_unit_refresh` config is set to `none`. This action is not applicable."
+                "`pause-after-unit-refresh` config is set to `none`. This action is not applicable."
             )
             # Do not log any additional information to action output
             action = None
@@ -2798,7 +2798,7 @@ class Machines(Common):
             if self._units.index(charm.unit) == 0:
                 reason = "this unit is the first unit to refresh"
             else:
-                reason = f"pause_after_unit_refresh config is {repr(self._pause_after.value)}"
+                reason = f"pause-after-unit-refresh config is {repr(self._pause_after.value)}"
                 if self._pause_after is _PauseAfter.FIRST:
                     reason += " and second unit already refreshed"
 
@@ -3017,8 +3017,8 @@ class Machines(Common):
                     "up-to-date. If this unit is stuck and has repeatedly logged this message for "
                     "longer than 5 minutes, please contact the developers of this charm for "
                     f"support. If they are unreachable, consider running `juju config {charm.app} "
-                    f"pause_after_unit_refresh=invalid` and then running `juju config {charm.app} "
-                    "pause_after_unit_refresh=all`"
+                    f"pause-after-unit-refresh=invalid` and then running `juju config {charm.app} "
+                    "pause-after-unit-refresh=all`"
                 )
 
         # Whether this unit's charm code version is up-to-date
@@ -3357,7 +3357,7 @@ class Machines(Common):
         self._units = sorted(self._relation.all_units, reverse=True)
         """Sorted from highest to lowest unit number (refresh order)"""
         self._start_refresh()
-        self._pause_after = _PauseAfter(charm.config["pause_after_unit_refresh"])
+        self._pause_after = _PauseAfter(charm.config["pause-after-unit-refresh"])
 
         # Set app status before potential snap refresh since snap refresh may take a long time
         # Ignore resume-refresh action when setting app status so that the app status UX is the

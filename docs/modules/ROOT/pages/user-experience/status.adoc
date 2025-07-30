@@ -24,13 +24,13 @@ The charm has not been granted permission to control the Kubernetes StatefulSet 
 include::partial$app-status.adoc[]
 
 [#invalid-pause-after-unit-refresh]
-=== pause_after_unit_refresh set to invalid value
+=== pause-after-unit-refresh set to invalid value
 
-xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is not set to `all`, `first`, or `none`
+xref:user-experience/config.adoc#pause-after-unit-refresh[pause-after-unit-refresh] is not set to `all`, `first`, or `none`
 
 :status-charm: {ex-charm}
 :status-type: blocked
-:status-message: pause_after_unit_refresh config must be set to "all", "first", or "none"
+:status-message: pause-after-unit-refresh config must be set to "all", "first", or "none"
 include::partial$app-status.adoc[]
 
 [#machines-in-progress-unknown]
@@ -79,7 +79,7 @@ unit-{ex-charm-vm}-0: 11:34:35 INFO unit.{ex-charm-vm}/0.juju-log charm_refresh:
 [#kubernetes-last-unit-refreshing]
 === (Kubernetes only) Last unit is refreshing
 
-If the Kubernetes StatefulSet partition has been set to allow the last unit to refresh, the refresh cannot be halted using the xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh config option].
+If the Kubernetes StatefulSet partition has been set to allow the last unit to refresh, the refresh cannot be halted using the xref:user-experience/config.adoc#pause-after-unit-refresh[pause-after-unit-refresh config option].
 
 At that point, a rollback is only possible if Kubernetes decides not to refresh the last unit (because the up-to-date units' pod readiness probes have not all succeeded) and the user runs `juju refresh`.
 
@@ -102,7 +102,7 @@ include::partial$app-status-rev.adoc[]
 [#in-progress-pause]
 === Refresh will pause for manual confirmation
 
-(xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is set to `all` or set to `first` and the second unit has not started to refresh)
+(xref:user-experience/config.adoc#pause-after-unit-refresh[pause-after-unit-refresh] is set to `all` or set to `first` and the second unit has not started to refresh)
 
 [#in-progress-pause-kubernetes]
 ==== Kubernetes
@@ -133,11 +133,11 @@ include::partial$app-status-rev.adoc[]
 [#in-progress-no-pause]
 === Refresh will not pause for manual confirmation
 
-(xref:user-experience/config.adoc#pause-after-unit-refresh[pause_after_unit_refresh] is set to `none` or set to `first` and the second unit has refreshed or started to refresh)
+(xref:user-experience/config.adoc#pause-after-unit-refresh[pause-after-unit-refresh] is set to `none` or set to `first` and the second unit has refreshed or started to refresh)
 
 :status-charm: {ex-charm}
 :status-type: maintenance
-:status-message: Refreshing. To pause refresh, run `juju config {ex-charm} pause_after_unit_refresh=all`
+:status-message: Refreshing. To pause refresh, run `juju config {ex-charm} pause-after-unit-refresh=all`
 include::partial$app-status.adoc[]
 
 [#unit-higher-priority]

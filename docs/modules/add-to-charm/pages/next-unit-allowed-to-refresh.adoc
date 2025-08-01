@@ -27,31 +27,31 @@ It must only be read for that purpose.
 `next_unit_allowed_to_refresh` can only be set to `True`.
 When the unit is refreshed, `next_unit_allowed_to_refresh` will be automatically reset to `False`.
 
-.pause_after_unit_refresh config option
+.pause-after-unit-refresh config option
 ****
-next_unit_allowed_to_refresh is different from the pause_after_unit_refresh user configuration option.
+next_unit_allowed_to_refresh is different from the pause-after-unit-refresh user configuration option.
 
 next_unit_allowed_to_refresh is set to True by the charm code after the charm code's automatic health checks succeed.
 
-If next_unit_allowed_to_refresh is not set to True, the refresh will pause and the next unit will not refresh, regardless of the value of the pause_after_unit_refresh config option.
+If next_unit_allowed_to_refresh is not set to True, the refresh will pause and the next unit will not refresh, regardless of the value of the pause-after-unit-refresh config option.
 
 Exception: The user can manually override failing automatic health checks (i.e. next_unit_allowed_to_refresh not being set to True) by running the `resume-refresh` action with `check-health-of-refreshed-units=false`.
 
-After next_unit_allowed_to_refresh is set to True, the value of the pause_after_unit_refresh config option determines whether the next unit will automatically begin to refresh or if the user will need to run the `resume-refresh` action to refresh the next unit.
+After next_unit_allowed_to_refresh is set to True, the value of the pause-after-unit-refresh config option determines whether the next unit will automatically begin to refresh or if the user will need to run the `resume-refresh` action to refresh the next unit.
 
 For example:
 
-* If next_unit_allowed_to_refresh is set to True and pause_after_unit_refresh is set to "all", the next unit will not refresh until the user runs the `resume-refresh` action
-* If pause_after_unit_refresh is set to "none" and next_unit_allowed_to_refresh is not set to True, the next unit will not refresh until next_unit_allowed_to_refresh is set to True
+* If next_unit_allowed_to_refresh is set to True and pause-after-unit-refresh is set to "all", the next unit will not refresh until the user runs the `resume-refresh` action
+* If pause-after-unit-refresh is set to "none" and next_unit_allowed_to_refresh is not set to True, the next unit will not refresh until next_unit_allowed_to_refresh is set to True
 
 '''
 
 Any health check that can be automated should be automated.
 And it should succeed before next_unit_allowed_to_refresh is set to True.
 
-pause_after_unit_refresh is intended only for manual health checks that cannot be automated in the charm code (e.g. that all clients are healthy, that traffic patterns look normal, that performance is acceptable, etc.).
+pause-after-unit-refresh is intended only for manual health checks that cannot be automated in the charm code (e.g. that all clients are healthy, that traffic patterns look normal, that performance is acceptable, etc.).
 
-pause_after_unit_refresh may be configured to "none", so the automatic health checks alone must be sufficient to ensure that it is (reasonably) safe to proceed with the refresh.
+pause-after-unit-refresh may be configured to "none", so the automatic health checks alone must be sufficient to ensure that it is (reasonably) safe to proceed with the refresh.
 
 More info: xref:ROOT:user-experience.adoc[]
 ****

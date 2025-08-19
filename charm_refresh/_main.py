@@ -3344,7 +3344,7 @@ class Machines(Common):
                             f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n"
                             "After the refresh has started, use this command to rollback:\n"
                             f"`juju refresh {charm.app} --revision "
-                            f"{self._pinned_workload_container_version}`"
+                            f"{self._installed_charm_revision_raw.charmhub_revision}`"
                         )
                     }
                     logger.info("Pre-refresh check succeeded")

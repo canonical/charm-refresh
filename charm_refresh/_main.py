@@ -2019,9 +2019,9 @@ class Machines(Common):
         ):
             logger.info(
                 f"Allowed next unit to refresh if this unit's snap revision "
-                f"({self._relation.my_unit['installed_snap_revision']}) & databag are up-to-date "
-                "and if permitted by pause-after-unit-refresh config option or resume-refresh "
-                "action"
+                f"({self._relation.my_unit.get('installed_snap_revision')}) & databag are "
+                "up-to-date and if permitted by pause-after-unit-refresh config option or "
+                "resume-refresh action"
             )
             self._relation.my_unit[
                 "next_unit_allowed_to_refresh_if_this_units_snap_revision_and_databag_are_up_to_date"

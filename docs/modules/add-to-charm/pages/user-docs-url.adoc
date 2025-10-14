@@ -73,6 +73,7 @@ NOTE: Use a https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/3
 . Commit changes
 +
 .Example commit message
+[subs="+attributes"]
 ----
 Add Charmhub redirect for postgresql-k8s refresh user docs
 

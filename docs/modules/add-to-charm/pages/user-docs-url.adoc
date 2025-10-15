@@ -1,4 +1,4 @@
-= 31. Set up URL redirect to user docs
+= 31. Set up URL redirects to user docs
 :page-pagination: sibling
 
 In the output of the `pre-refresh-check` action, charm-refresh will display a URL to the charm's user documentation for in-place refreshes.
@@ -33,15 +33,50 @@ This URL must be redirected to user documentation that provides instructions for
 NOTE: At the time this version (e.g. {ex-charm-version}) is released, it will not be possible to know all of the future versions that will support refreshing from that version
 
 [#redirect]
-== Set up redirect
+== Set up redirects
 
 [#community]
 === Community charm developers
 
-xref:ROOT:contact.adoc[] and we will assist you with creating the redirect
+xref:ROOT:contact.adoc[] and we will assist you with creating the redirects
 
 [#canonical-staff]
 === Canonical staff
 
-// TODO replace with docs on process
-Contact @avgomes, @carlcsaposs, or @taurus on Mattermost to set up the redirect
+These instructions assume that all charm compatibility versions for a track share the same redirect target.
+For more specific redirects (i.e. if the refresh instructions are different for some versions), refer to https://discourse.charmhub.io/t/content-cache-docs-sites-configuration/5408[IS' documentation on the sites.yaml format].
+
+. Clone https://code.launchpad.net/canonical-mojo-specs
+
+. Open `website-content-cache/production/sites.yaml`
+
+. Under `charmhub.io` key -> `locations` key, add a redirect
++
+--
+.Example redirect
+[.wrap,yaml,subs="+attributes"]
+----
+charmhub.io:
+  locations:
+    /{ex-charm}/docs/refresh/{ex-track}/: # <.>
+      backend-inter-time: 5s
+      cache-validity: '200 307 1h'
+      extra-config: ['return 307 https://canonical-charmed-{ex-charm}.readthedocs-hosted.com/{ex-track}/how-to/refresh/'] # <.>
+----
+<.> Replace `{ex-charm}` with the charm name in metadata.yaml.
+Replace `{ex-track}` with xref:charm-version.adoc#workflow[the track the charm is released to]
+<.> Replace `https://canonical-charmed-{ex-charm}.readthedocs-hosted.com/{ex-track}/how-to/refresh/` with the <<target>>
+
+NOTE: Use a https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/307[307 HTTP response status code] to indicate a temporary redirect so that the redirect target can be changed in the future (if versions in the same track need different refresh instructions)
+--
+
+. Commit changes
++
+.Example commit message
+----
+Add Charmhub redirect for postgresql-k8s refresh user docs
+----
+
+. Open a merge request
+
+. Ask in https://chat.canonical.com/canonical/channels/is for the merge request to be reviewed

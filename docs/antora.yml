@@ -19,7 +19,8 @@ asciidoc:
     ex-charm-vm: postgresql
     ex-charm-rev: '602'
     ex-charm-rev-to: '613'
-    ex-charm-version: 16/1.19.0
+    ex-track: '16'
+    ex-charm-version: '{ex-track}/1.19.0'
     ex-workload: PostgreSQL
     ex-oci-resource-name: postgresql-image
     ex-container-name: postgresql

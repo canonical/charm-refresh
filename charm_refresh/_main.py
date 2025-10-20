@@ -1835,13 +1835,35 @@ class Kubernetes(Common):
                         f"{exception.message}"
                     )
                 else:
+                    if (
+                        self._pause_after is _PauseAfter.ALL
+                        or self._pause_after is _PauseAfter.UNKNOWN
+                    ):
+                        pause_after_message = (
+                            "The refresh will pause for your manual confirmation after each unit "
+                            "refreshes"
+                        )
+                    elif self._pause_after is _PauseAfter.FIRST:
+                        pause_after_message = (
+                            "The refresh will pause for your manual confirmation after the first "
+                            "unit refreshes"
+                        )
+                    elif self._pause_after is _PauseAfter.NONE:
+                        pause_after_message = (
+                            "The refresh will not pause for your manual confirmation"
+                        )
+                    else:
+                        raise TypeError
                     charm.event.result = {
                         "result": (
                             "Charm is ready for refresh. For refresh instructions, see "
-                            f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n"
+                            f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n\n"
                             "After the refresh has started, use this command to rollback (copy "
                             "this down in case you need it later):\n"
-                            f"`{self._rollback_command}`"
+                            f"`{self._rollback_command}`\n\n"
+                            f"{pause_after_message}. To change this, set the "
+                            "`pause-after-unit-refresh` config option. Run `juju config "
+                            f"{charm.app}` for more information"
                         )
                     }
                     logger.info("Pre-refresh check succeeded")
@@ -3320,6 +3342,8 @@ class Machines(Common):
         if presume_log is not None and self._in_progress is not _MachinesInProgress.FALSE:
             logger.info(presume_log)
 
+        self._pause_after = _PauseAfter(charm.config["pause-after-unit-refresh"])
+
         # pre-refresh-check action
         if isinstance(charm.event, charm.ActionEvent) and charm.event.action == "pre-refresh-check":
             if self._in_progress is not _MachinesInProgress.FALSE:
@@ -3338,13 +3362,35 @@ class Machines(Common):
                         f"{exception.message}"
                     )
                 else:
+                    if (
+                        self._pause_after is _PauseAfter.ALL
+                        or self._pause_after is _PauseAfter.UNKNOWN
+                    ):
+                        pause_after_message = (
+                            "The refresh will pause for your manual confirmation after each unit "
+                            "refreshes"
+                        )
+                    elif self._pause_after is _PauseAfter.FIRST:
+                        pause_after_message = (
+                            "The refresh will pause for your manual confirmation after the first "
+                            "unit refreshes"
+                        )
+                    elif self._pause_after is _PauseAfter.NONE:
+                        pause_after_message = (
+                            "The refresh will not pause for your manual confirmation"
+                        )
+                    else:
+                        raise TypeError
                     charm.event.result = {
                         "result": (
                             "Charm is ready for refresh. For refresh instructions, see "
-                            f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n"
+                            f"https://charmhub.io/{self._charm_specific.charm_name}/docs/refresh/{self._installed_charm_version}\n\n"
                             "After the refresh has started, use this command to rollback:\n"
                             f"`juju refresh {charm.app} --revision "
-                            f"{self._installed_charm_revision_raw.charmhub_revision}`"
+                            f"{self._installed_charm_revision_raw.charmhub_revision}`\n\n"
+                            f"{pause_after_message}. To change this, set the "
+                            "`pause-after-unit-refresh` config option. Run `juju config "
+                            f"{charm.app}` for more information"
                         )
                     }
                     logger.info("Pre-refresh check succeeded")
@@ -3357,7 +3403,6 @@ class Machines(Common):
         self._units = sorted(self._relation.all_units, reverse=True)
         """Sorted from highest to lowest unit number (refresh order)"""
         self._start_refresh()
-        self._pause_after = _PauseAfter(charm.config["pause-after-unit-refresh"])
 
         # Set app status before potential snap refresh since snap refresh may take a long time
         # Ignore resume-refresh action when setting app status so that the app status UX is the

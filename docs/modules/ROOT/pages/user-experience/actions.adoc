@@ -57,8 +57,8 @@ Action id 2 failed: Charm is not ready for refresh. Pre-refresh check failed: {e
 [#pre-refresh-check-succeeded]
 === Health checks & preparations succeeded
 
-[#pre-refresh-check-succeeded-kubernetes]
-==== Kubernetes
+[#pre-refresh-check-user-docs]
+==== Part 1: User docs URL
 
 [.wrap,console,subs="+attributes"]
 ----
@@ -69,19 +69,71 @@ Running operation 1 with 1 task
 Waiting for task 2...
 result: |-
   Charm is ready for refresh. For refresh instructions, see https://charmhub.io/{ex-charm}/docs/refresh/{ex-charm-version}
+----
+
+[#pre-refresh-check-rollback-command]
+==== Part 2: Rollback command
+
+.Kubernetes
+[.wrap,subs="+attributes"]
+----
+result: |-
+  [...]  # User docs URL
+
   After the refresh has started, use this command to rollback (copy this down in case you need it later):
   `{ex-rollback-command}`
 ----
 
-[#pre-refresh-check-succeeded-machines]
-==== Machines
+.Machines
+[.wrap,subs="+attributes"]
+----
+result: |-
+  [...]  # User docs URL
+
+  After the refresh has started, use this command to rollback:
+  `juju refresh {ex-charm-vm} --revision {ex-charm-rev}`
+----
+
+[#pre-refresh-check-pause-after]
+==== Part 3: pause-after-unit-refresh confirmation
+
+[#pre-refresh-check-pause-after-all]
+===== pause-after-unit-refresh is all
 
 [.wrap,subs="+attributes"]
 ----
 result: |-
-  Charm is ready for refresh. For refresh instructions, see https://charmhub.io/{ex-charm-vm}/docs/refresh/{ex-charm-version}
-  After the refresh has started, use this command to rollback:
-  `juju refresh {ex-charm-vm} --revision {ex-charm-rev}`
+  [...]  # User docs URL
+
+  [...]  # Rollback command
+
+  The refresh will pause for your manual confirmation after each unit refreshes. To change this, set the `pause-after-unit-refresh` config option. Run `juju config {ex-charm}` for more information
+----
+
+[#pre-refresh-check-pause-after-first]
+===== pause-after-unit-refresh is first
+
+[.wrap,subs="+attributes"]
+----
+result: |-
+  [...]  # User docs URL
+
+  [...]  # Rollback command
+
+  The refresh will pause for your manual confirmation after the first unit refreshes. To change this, set the `pause-after-unit-refresh` config option. Run `juju config {ex-charm}` for more information
+----
+
+[#pre-refresh-check-pause-after-none]
+===== pause-after-unit-refresh is none
+
+[.wrap,subs="+attributes"]
+----
+result: |-
+  [...]  # User docs URL
+
+  [...]  # Rollback command
+
+  The refresh will not pause for your manual confirmation. To change this, set the `pause-after-unit-refresh` config option. Run `juju config {ex-charm}` for more information
 ----
 
 [#force-refresh-start]

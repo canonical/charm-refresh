@@ -1,4 +1,4 @@
-# Derived from https://github.com/canonical/data-platform-workflows/blob/v32.0.0/python/cli/data_platform_workflows_cli/check_semantic_version_prefix.py
+# Derived from https://github.com/canonical/data-platform-workflows/blob/v48.0.4/_cli/data_platform_workflows_cli/check_semantic_version_prefix.py
 import os
 import re
 

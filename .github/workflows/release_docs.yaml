@@ -38,7 +38,7 @@ jobs:
 
           import requests
 
-          repository_name = os.environ["VAR_REPOSITORY"].removeprefix(os.environ["VAR_REPOSITORY_OWNER"])
+          repository_name = os.environ["VAR_REPOSITORY"].removeprefix(f"{os.environ['VAR_REPOSITORY_OWNER']}/")
           headers = {"Authorization": f"Token {os.environ['READTHEDOCS_TOKEN']}"}
 
           # Trigger build

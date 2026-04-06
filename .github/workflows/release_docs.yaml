@@ -26,6 +26,9 @@ jobs:
     name: Release docs to Read the Docs
     runs-on: ubuntu-latest
     timeout-minutes: 15  # Long timeout needed for Read the Docs build queue
+    environment:
+      name: readthedocs
+      deployment: false
     steps:
       - name: Release documentation
         shell: python
@@ -35,7 +38,7 @@ jobs:
 
           import requests
 
-          repository_name = "${{ github.repository }}".removeprefix("${{ github.repository_owner }}/")
+          repository_name = os.environ["VAR_REPOSITORY"].removeprefix(os.environ["VAR_REPOSITORY_OWNER"])
           headers = {"Authorization": f"Token {os.environ['READTHEDOCS_TOKEN']}"}
 
           # Trigger build
@@ -71,3 +74,6 @@ jobs:
                   raise TypeError
         env:
           READTHEDOCS_TOKEN: ${{ secrets.readthedocs-token }}
+          VAR_REPOSITORY: ${{ github.repository }}
+          VAR_REPOSITORY_OWNER: ${{ github.repository_owner }}
+    permissions: {}

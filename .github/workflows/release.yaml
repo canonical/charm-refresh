@@ -15,20 +15,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-tests:
+    name: Tests
+    uses: ./.github/workflows/ci.yaml
+    permissions:
+      contents: read
+
   tag:
     name: Tag release
+    needs:
+      - ci-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          persist-credentials: true
           fetch-depth: 0  # Checkout history with git tags & all branches
       - name: Install CLI
         run: pipx install .github/workflows/_cli/
       - name: Create release tag & create branch for last minor version & update antora-main- tag
         id: create-tag
-        run: create-version-tag-and-branch --branch-name='${{ github.ref_name }}'
+        run: create-version-tag-and-branch --branch-name="${VAR_REF_NAME}"
+        env:
+          VAR_REF_NAME: ${{ github.ref_name }}
     outputs:
       tag: ${{ steps.create-tag.outputs.tag }}
     permissions:
@@ -42,8 +53,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0  # Checkout history with git tags
       - name: Install poetry
         run: |
@@ -52,12 +64,13 @@ jobs:
       - name: Build package
         run: poetry build
       - name: Store the distribution packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions  # Keep in sync with `artifact-name` output
           path: dist/
     outputs:
       artifact-name: python-package-distributions
+    permissions: {}
 
   release-docs:
     name: Release docs to Read the Docs
@@ -66,6 +79,7 @@ jobs:
     uses: canonical/charm-refresh/.github/workflows/release_docs.yaml@docs-playbook
     secrets:
       readthedocs-token: ${{ secrets.READTHEDOCS_TOKEN }}
+    permissions: {}
 
   release-trusted-publishing:
     name: Release to PyPI (trusted publishing)
@@ -74,10 +88,12 @@ jobs:
       - release-docs
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    environment: production
+    environment:
+      name: production
+      deployment: true
     steps:
       - name: Download all the dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.artifact-name }}
           path: dist/
@@ -107,15 +123,11 @@ jobs:
         # "v1.0.0.10")
         # Instead, determine if this is the latest version by whether this branch is the default
         # branch
-        run: |
-          # Check if this branch is the default branch for the GitHub repository
-          if [[ '${{ github.ref }}' == 'refs/heads/${{ github.event.repository.default_branch }}' ]]
-          then
-            gh release --repo '${{ github.repository }}' create '${{ needs.tag.outputs.tag }}' --verify-tag --generate-notes --latest
-          else
-            gh release --repo '${{ github.repository }}' create '${{ needs.tag.outputs.tag }}' --verify-tag --generate-notes --latest=false
-          fi
+        run: gh release --repo "${VAR_REPOSITORY}" create "${VAR_TAG}" --verify-tag --generate-notes "${VAR_LATEST}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VAR_REPOSITORY: ${{ github.repository }}
+          VAR_TAG: ${{ needs.tag.outputs.tag }}
+          VAR_LATEST: ${{ case(github.ref_name == github.event.repository.default_branch && startsWith(github.ref, 'refs/heads/'), '--latest', '--latest=false') }}
     permissions:
       contents: write  # Needed to create GitHub release

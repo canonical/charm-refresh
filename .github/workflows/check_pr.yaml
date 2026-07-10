@@ -1,6 +1,6 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
-# Derived from https://github.com/canonical/data-platform-workflows/blob/v32.0.0/.github/workflows/check_python_package_pr.yaml
+# Derived from https://github.com/canonical/data-platform-workflows/blob/v48.0.4/.github/workflows/check_python_package_pr.yaml
 name: Check pull request
 
 on:
@@ -18,8 +18,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0  # Checkout history with git tags
       - name: Install CLI
         run: pipx install .github/workflows/_cli/
@@ -28,3 +29,4 @@ jobs:
         # Use env variable to avoid script injection
         env:
           TITLE: ${{ github.event.pull_request.title }}
+    permissions: {}

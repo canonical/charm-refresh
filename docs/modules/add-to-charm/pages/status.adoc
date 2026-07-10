@@ -44,6 +44,13 @@ The charm code must check in *every Juju event* if this status should be set.
 
 NOTE: "Every Juju event" includes Juju events that the charm code may not currently https://ops.readthedocs.io/en/latest/reference/ops.html#ops.Framework.observe[observe]
 
+[TIP]
+====
+For statuses with a message that are set at all times (for example, the PostgreSQL charm sets an active status with the message "Primary" on the primary unit), consider making an exception and treating these statuses the same as statuses without a message.
+
+In other words, consider giving #4 higher priority than a status with a message that is set at all times
+====
+
 [#implementation]
 == Implementation
 

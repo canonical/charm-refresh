@@ -61,11 +61,11 @@ charmhub.io:
     /{ex-charm}/docs/refresh/{ex-track}/: # <.>
       backend-inter-time: 5s
       cache-validity: '200 307 1h'
-      extra-config: ['return 307 https://canonical-charmed-{ex-charm}.readthedocs-hosted.com/{ex-track}/how-to/refresh/'] # <.>
+      extra-config: ['return 307 https://canonical.com/data/{ex-charm-vm}/docs/{ex-track}/how-to/refresh/'] # <.>
 ----
 <.> Replace `{ex-charm}` with the charm name in metadata.yaml.
 Replace `{ex-track}` with xref:charm-version.adoc#workflow[the track the charm is released to]
-<.> Replace `https://canonical-charmed-{ex-charm}.readthedocs-hosted.com/{ex-track}/how-to/refresh/` with the <<target>>
+<.> Replace `https://canonical.com/data/{ex-charm-vm}/docs/{ex-track}/how-to/refresh/` with the <<target>>
 
 NOTE: Use a https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/307[307 HTTP response status code] to indicate a temporary redirect so that the redirect target can be changed in the future (if versions in the same track need different refresh instructions)
 --

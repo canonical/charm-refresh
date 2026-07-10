@@ -1,4 +1,4 @@
-# Derived from https://github.com/canonical/data-platform-workflows/blob/v32.0.0/python/cli/data_platform_workflows_cli/create_semantic_version_tag.py
+# Derived from https://github.com/canonical/data-platform-workflows/blob/v48.0.4/_cli/data_platform_workflows_cli/create_semantic_version_tag.py
 import argparse
 import dataclasses
 import logging

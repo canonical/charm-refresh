@@ -17,9 +17,10 @@ concurrency:
 jobs:
   ci-tests:
     name: Tests
-    uses: ./.github/workflows/ci.yaml
+    uses: $/.github/workflows/ci.yaml
     permissions:
       contents: read
+    cache-mode: none
 
   tag:
     name: Tag release
@@ -44,6 +45,7 @@ jobs:
       tag: ${{ steps.create-tag.outputs.tag }}
     permissions:
       contents: write  # Needed to create git tag
+    cache-mode: none
 
   build:
     name: Build package
@@ -71,6 +73,7 @@ jobs:
     outputs:
       artifact-name: python-package-distributions
     permissions: {}
+    cache-mode: none
 
   release-docs:
     name: Release docs to Read the Docs
@@ -80,6 +83,7 @@ jobs:
     secrets:
       readthedocs-token: ${{ secrets.READTHEDOCS_TOKEN }}
     permissions: {}
+    cache-mode: none
 
   release-trusted-publishing:
     name: Release to PyPI (trusted publishing)
@@ -101,6 +105,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
     permissions:
       id-token: write  # Needed for PyPI trusted publishing
+    cache-mode: none
 
   release:
     name: Create GitHub release
@@ -131,3 +136,4 @@ jobs:
           VAR_LATEST: ${{ case(github.ref_name == github.event.repository.default_branch && startsWith(github.ref, 'refs/heads/'), '--latest', '--latest=false') }}
     permissions:
       contents: write  # Needed to create GitHub release
+    cache-mode: none

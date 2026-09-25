@@ -30,3 +30,4 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
     permissions: {}
+    cache-mode: none

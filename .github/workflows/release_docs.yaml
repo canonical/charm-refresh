@@ -77,3 +77,4 @@ jobs:
           VAR_REPOSITORY: ${{ github.repository }}
           VAR_REPOSITORY_OWNER: ${{ github.repository_owner }}
     permissions: {}
+    cache-mode: none

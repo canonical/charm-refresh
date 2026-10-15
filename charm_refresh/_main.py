@@ -1763,7 +1763,19 @@ class Kubernetes(Common):
         # Exclude `None` values (for scale up/down or initial install) to avoid displaying app
         # status that says pause-after-unit-refresh is set to invalid value
         pause_after_values = (value for value in pause_after_values if value is not None)
-        self._pause_after = max(_PauseAfter(value) for value in pause_after_values)
+        self._pause_after = max(
+            (_PauseAfter(value) for value in pause_after_values),
+            # In rare cases, it is possible that `len(pause_after_values)` is not >= 1.
+            # For example, if the following sequence occurs:
+            # 1. The app is refreshed to a revision with the incorrect architecture
+            # 2. The app is scaled up
+            # 3. The app is refreshed to any revision
+            # For a moment, units other than the highest unit may not see a value for
+            # "pause_after_unit_refresh_config" in the highest unit's databag (which would be the
+            # only unit in `most_up_to_date_units`).
+            # Fallback to `_PauseAfter.ALL` until a value is available from a unit's databag
+            default=_PauseAfter.ALL,
+        )
 
         if not self._in_progress:
             # Clean up state that is no longer in use
